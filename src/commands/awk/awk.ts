@@ -39,11 +39,11 @@ export const awkCommand: Command = {
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
       if (arg === '-F' && i + 1 < args.length) {
-        fieldSepStr = args[++i];
+        fieldSepStr = processEscapes(args[++i]);
         fieldSep = new RegExp(escapeRegex(fieldSepStr));
         programIdx = i + 1;
       } else if (arg.startsWith('-F')) {
-        fieldSepStr = arg.slice(2);
+        fieldSepStr = processEscapes(arg.slice(2));
         fieldSep = new RegExp(escapeRegex(fieldSepStr));
         programIdx = i + 1;
       } else if (arg === '-v' && i + 1 < args.length) {
@@ -171,6 +171,7 @@ function parseAwkProgram(program: string): ParsedProgram {
   if (remaining) {
     // Parse main rules
     // Common patterns: { action }, /pattern/ { action }, condition { action }
+    // Also: /pattern/ (no action, defaults to print), condition (no action, defaults to print)
 
     // Simple case: just { action }
     const simpleAction = remaining.match(/^\{([^}]*)\}$/);
@@ -182,15 +183,24 @@ function parseAwkProgram(program: string): ParsedProgram {
       if (patternAction) {
         result.main.push({ pattern: patternAction[1], action: patternAction[2].trim() });
       } else {
-        // Condition { action }
-        const condAction = remaining.match(/^([^{]+)\{([^}]*)\}$/);
-        if (condAction) {
-          result.main.push({ pattern: condAction[1].trim(), action: condAction[2].trim() });
+        // Pattern only (no action) - /pattern/ - default action is print
+        const patternOnly = remaining.match(/^\/([^/]*)\/$/);
+        if (patternOnly) {
+          result.main.push({ pattern: patternOnly[1], action: 'print' });
         } else {
-          // Just a print expression like: { print $1 } or print $1
-          // Or expression without braces
-          if (!remaining.includes('{')) {
-            result.main.push({ pattern: null, action: remaining });
+          // Condition { action }
+          const condAction = remaining.match(/^([^{]+)\{([^}]*)\}$/);
+          if (condAction) {
+            result.main.push({ pattern: condAction[1].trim(), action: condAction[2].trim() });
+          } else if (!remaining.includes('{')) {
+            // Condition only (no action) - NR==2 or similar - default action is print
+            // Or just a print expression like: print $1
+            if (remaining.startsWith('print') || remaining.startsWith('printf')) {
+              result.main.push({ pattern: null, action: remaining });
+            } else {
+              // It's a condition without action - default to print
+              result.main.push({ pattern: remaining, action: 'print' });
+            }
           }
         }
       }
@@ -480,4 +490,12 @@ function evaluatePrintf(args: string, ctx: AwkContext): string {
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function processEscapes(str: string): string {
+  return str
+    .replace(/\\t/g, '\t')
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\\\/g, '\\');
 }

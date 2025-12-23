@@ -39,6 +39,8 @@ import { aliasCommand, unaliasCommand } from './commands/alias/alias.js';
 import { historyCommand } from './commands/history/history.js';
 import { lnCommand } from './commands/ln/ln.js';
 import { readlinkCommand } from './commands/readlink/readlink.js';
+import { printfCommand } from './commands/printf/printf.js';
+import { bashCommand, shCommand } from './commands/bash/bash.js';
 
 // Default protection limits
 const DEFAULT_MAX_CALL_DEPTH = 100;
@@ -178,6 +180,9 @@ export class BashEnv {
     this.registerCommand(historyCommand);
     this.registerCommand(lnCommand);
     this.registerCommand(readlinkCommand);
+    this.registerCommand(printfCommand);
+    this.registerCommand(bashCommand);
+    this.registerCommand(shCommand);
   }
 
   registerCommand(command: Command): void {

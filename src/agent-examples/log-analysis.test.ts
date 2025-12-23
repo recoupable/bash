@@ -160,4 +160,117 @@ describe('Agent Scenario: Log Analysis', () => {
     expect(result.stderr).toBe('');
     expect(result.exitCode).toBe(0);
   });
+
+  // awk-based log analysis tests
+  it('should extract timestamps using awk', async () => {
+    const env = createEnv();
+    const result = await env.exec("awk '{print $1, $2}' /logs/app.log");
+    expect(result.stdout).toBe(`2024-01-15 10:00:00
+2024-01-15 10:00:01
+2024-01-15 10:05:23
+2024-01-15 10:10:00
+2024-01-15 10:10:01
+2024-01-15 10:10:02
+2024-01-15 10:20:45
+2024-01-15 10:30:15
+`);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should extract IP addresses from access log', async () => {
+    const env = createEnv();
+    const result = await env.exec("awk '{print $1}' /logs/access.log");
+    expect(result.stdout).toBe(`192.168.1.50
+192.168.1.100
+192.168.1.100
+192.168.1.50
+`);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should extract HTTP status codes from access log', async () => {
+    const env = createEnv();
+    const result = await env.exec("awk '{print $4}' /logs/access.log");
+    expect(result.stdout).toBe(`200
+401
+401
+500
+`);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should filter ERROR lines with awk pattern', async () => {
+    const env = createEnv();
+    const result = await env.exec("awk '/ERROR/' /logs/app.log");
+    expect(result.stdout).toBe(`2024-01-15 10:10:00 ERROR Connection timeout
+2024-01-15 10:20:45 ERROR Auth failed user@example.com
+2024-01-15 10:30:15 ERROR NullPointerException
+`);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should extract log level using awk', async () => {
+    const env = createEnv();
+    const result = await env.exec("awk '{print $3}' /logs/app.log");
+    expect(result.stdout).toBe(`INFO
+INFO
+INFO
+ERROR
+WARN
+INFO
+ERROR
+ERROR
+`);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should print line numbers with awk NR', async () => {
+    const env = createEnv();
+    const result = await env.exec("awk '{print NR, $0}' /logs/access.log");
+    expect(result.stdout).toBe(`1 192.168.1.50 GET /api/users 200
+2 192.168.1.100 POST /api/login 401
+3 192.168.1.100 POST /api/login 401
+4 192.168.1.50 POST /api/orders 500
+`);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should filter by line number with awk NR condition', async () => {
+    const env = createEnv();
+    const result = await env.exec("awk 'NR==2' /logs/access.log");
+    expect(result.stdout).toBe('192.168.1.100 POST /api/login 401\n');
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should extract request paths from access log', async () => {
+    const env = createEnv();
+    const result = await env.exec("awk '{print $3}' /logs/access.log");
+    expect(result.stdout).toBe(`/api/users
+/api/login
+/api/login
+/api/orders
+`);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should use awk with pipe to filter and extract', async () => {
+    const env = createEnv();
+    const result = await env.exec("grep ERROR /logs/app.log | awk '{print $2}'");
+    expect(result.stdout).toBe(`10:10:00
+10:20:45
+10:30:15
+`);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should count fields with awk NF', async () => {
+    const env = createEnv();
+    const result = await env.exec("awk '{print NF}' /logs/access.log");
+    expect(result.stdout).toBe(`4
+4
+4
+4
+`);
+    expect(result.exitCode).toBe(0);
+  });
 });

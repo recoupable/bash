@@ -179,4 +179,59 @@ DEBUG=false
     expect(result.stderr).toBe('');
     expect(result.exitCode).toBe(0);
   });
+
+  // awk-based config analysis tests
+  it('should extract env variable names using awk with = separator', async () => {
+    const env = createEnv();
+    const result = await env.exec("awk -F= '{print $1}' /app/.env.example");
+    expect(result.stdout).toBe(`DATABASE_URL
+API_KEY
+DEBUG
+`);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should extract env variable values using awk', async () => {
+    const env = createEnv();
+    const result = await env.exec("awk -F= '{print $2}' /app/.env.example");
+    expect(result.stdout).toBe(`postgresql://localhost:5432/app
+your-api-key-here
+false
+`);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should extract production env values', async () => {
+    const env = createEnv();
+    const result = await env.exec("awk -F= '{print $2}' /app/.env.production");
+    expect(result.stdout).toBe(`postgresql://db.prod.example.com:5432/app
+prod-secret-key
+false
+`);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should format env as key: value using awk', async () => {
+    const env = createEnv();
+    const result = await env.exec("awk -F= '{print $1 \": \" $2}' /app/.env.example");
+    expect(result.stdout).toBe(`DATABASE_URL: postgresql://localhost:5432/app
+API_KEY: your-api-key-here
+DEBUG: false
+`);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should count env variables with awk NR and END', async () => {
+    const env = createEnv();
+    const result = await env.exec("awk 'END{print NR}' /app/.env.example");
+    expect(result.stdout).toBe('3\n');
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should filter env lines with awk pattern', async () => {
+    const env = createEnv();
+    const result = await env.exec("awk '/URL/' /app/.env.example");
+    expect(result.stdout).toBe('DATABASE_URL=postgresql://localhost:5432/app\n');
+    expect(result.exitCode).toBe(0);
+  });
 });
