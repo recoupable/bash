@@ -6,6 +6,8 @@ Designed for AI agents that need a secure, sandboxed bash environment.
 
 Supports optional network access via `curl` with secure-by-default URL filtering.
 
+**Note**: This is pre-released alpha software. Use at your own risk and please provide feedback.
+
 ## Table of Contents
 
 - [Security model](#security-model)
