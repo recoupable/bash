@@ -27,6 +27,9 @@ export interface ExecutionLimits {
 
   /** Maximum iterations for jq loops (until, while, repeat) (default: 10000) */
   maxJqIterations?: number;
+
+  /** Maximum sqlite3 query execution time in milliseconds (default: 5000) */
+  maxSqliteTimeoutMs?: number;
 }
 
 /**
@@ -41,6 +44,7 @@ const DEFAULT_LIMITS: Required<ExecutionLimits> = {
   maxAwkIterations: 10000,
   maxSedIterations: 10000,
   maxJqIterations: 10000,
+  maxSqliteTimeoutMs: 5000,
 };
 
 /**
@@ -64,5 +68,7 @@ export function resolveLimits(
       userLimits.maxSedIterations ?? DEFAULT_LIMITS.maxSedIterations,
     maxJqIterations:
       userLimits.maxJqIterations ?? DEFAULT_LIMITS.maxJqIterations,
+    maxSqliteTimeoutMs:
+      userLimits.maxSqliteTimeoutMs ?? DEFAULT_LIMITS.maxSqliteTimeoutMs,
   };
 }

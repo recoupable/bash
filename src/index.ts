@@ -4,10 +4,12 @@ export type {
   AllCommandName,
   CommandName,
   NetworkCommandName,
+  SqliteCommandName,
 } from "./commands/registry.js";
 export {
   getCommandNames,
   getNetworkCommandNames,
+  getSqliteCommandNames,
 } from "./commands/registry.js";
 // Custom commands API
 export type { CustomCommand, LazyCommand } from "./custom-commands.js";

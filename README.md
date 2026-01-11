@@ -245,7 +245,7 @@ pnpm shell --no-network
 
 ### Data Processing
 
-`jq` (JSON), `sqlite3` (SQLite), `xan` (CSV), `yq` (YAML/XML/TOML/CSV)
+`jq` (JSON), `sqlite3` (SQLite, requires opt-in), `xan` (CSV), `yq` (YAML/XML/TOML/CSV)
 
 ### Compression
 
@@ -321,6 +321,22 @@ const env = new Bash({
 ```
 
 **Note:** The `curl` command only exists when network is configured. Without network configuration, `curl` returns "command not found".
+
+## SQLite Support
+
+SQLite support (the `sqlite3` command) is opt-in because it requires the `better-sqlite3` native module. To enable it:
+
+```typescript
+const env = new Bash({ sqlite: true });
+
+// Query in-memory database
+await env.exec('sqlite3 :memory: "SELECT 1 + 1"');
+
+// Query file-based database
+await env.exec('sqlite3 data.db "SELECT * FROM users"');
+```
+
+**Note:** The `sqlite3` command only exists when `sqlite: true` is set. Without it, `sqlite3` returns "command not found". SQLite is not available in browser environments.
 
 ### Allow-List Security
 

@@ -23,6 +23,7 @@ import type {
   SubshellNode,
   WordNode,
 } from "../ast/types.js";
+import { isBrowserExcludedCommand } from "../commands/browser-excluded.js";
 import type { IFileSystem } from "../fs/interface.js";
 import type { ExecutionLimits } from "../limits.js";
 import type { SecureFetch } from "../network/index.js";
@@ -858,6 +859,14 @@ export class Interpreter {
     // External commands - resolve via PATH
     const resolved = await this.resolveCommand(commandName);
     if (!resolved) {
+      // Check if this is a browser-excluded command for a more helpful error
+      if (isBrowserExcludedCommand(commandName)) {
+        return failure(
+          `bash: ${commandName}: command not available in browser environments. ` +
+            `Exclude '${commandName}' from your commands or use the Node.js bundle.\n`,
+          127,
+        );
+      }
       return failure(`bash: ${commandName}: command not found\n`, 127);
     }
     const { cmd, path: cmdPath } = resolved;

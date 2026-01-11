@@ -3,8 +3,13 @@
  *
  * Wraps better-sqlite3 to provide SQLite database access through the virtual filesystem.
  * Databases are loaded from buffers and written back after modifications.
+ *
+ * Queries run in a worker thread with a timeout to prevent runaway queries
+ * (e.g., infinite recursive CTEs) from blocking execution.
  */
 
+import { fileURLToPath } from "node:url";
+import { Worker } from "node:worker_threads";
 import Database from "better-sqlite3";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { hasHelpFlag, showHelp } from "../help.js";
@@ -13,6 +18,10 @@ import {
   formatOutput,
   type OutputMode,
 } from "./formatters.js";
+import type { WorkerInput, WorkerOutput } from "./worker.js";
+
+/** Default query timeout in milliseconds (5 seconds) */
+const DEFAULT_QUERY_TIMEOUT_MS = 5000;
 
 const sqlite3Help = {
   name: "sqlite3",
@@ -177,9 +186,77 @@ function parseArgs(args: string[]):
   return { options, database, sql, showVersion };
 }
 
+// Get SQLite version from better-sqlite3
+function getSqliteVersion(): string {
+  const db = new Database(":memory:");
+  try {
+    const result = db.prepare("SELECT sqlite_version()").get() as {
+      "sqlite_version()": string;
+    };
+    return result["sqlite_version()"];
+  } finally {
+    db.close();
+  }
+}
+
 /**
- * Check if a SQL statement is a write operation
+ * Execute SQL directly (synchronous, no timeout protection).
+ * Used as fallback when worker threads aren't available.
  */
+function executeDirectly(input: WorkerInput): WorkerOutput {
+  let db: Database.Database;
+
+  try {
+    if (input.dbBuffer) {
+      db = new Database(Buffer.from(input.dbBuffer));
+    } else {
+      db = new Database(":memory:");
+    }
+  } catch (e) {
+    return { success: false, error: (e as Error).message };
+  }
+
+  const results: import("./worker.js").StatementResult[] = [];
+  let hasModifications = false;
+
+  try {
+    const statements = splitStatements(input.sql);
+
+    for (const stmt of statements) {
+      try {
+        if (isWriteStatement(stmt)) {
+          db.exec(stmt);
+          hasModifications = true;
+          results.push({ type: "data", columns: [], rows: [] });
+        } else {
+          const prepared = db.prepare(stmt);
+          const columnInfo = prepared.columns();
+          const columns = columnInfo.map((c) => c.name);
+          const rows = prepared.raw(true).all() as unknown[][];
+          results.push({ type: "data", columns, rows });
+        }
+      } catch (e) {
+        const error = (e as Error).message;
+        results.push({ type: "error", error });
+        if (input.options.bail) {
+          break;
+        }
+      }
+    }
+
+    let resultBuffer: Uint8Array | null = null;
+    if (hasModifications) {
+      resultBuffer = db.serialize();
+    }
+
+    db.close();
+    return { success: true, results, hasModifications, dbBuffer: resultBuffer };
+  } catch (e) {
+    db.close();
+    return { success: false, error: (e as Error).message };
+  }
+}
+
 function isWriteStatement(sql: string): boolean {
   const trimmed = sql.trim().toUpperCase();
   return (
@@ -193,9 +270,6 @@ function isWriteStatement(sql: string): boolean {
   );
 }
 
-/**
- * Split SQL into individual statements
- */
 function splitStatements(sql: string): string[] {
   const statements: string[] = [];
   let current = "";
@@ -208,9 +282,7 @@ function splitStatements(sql: string): string[] {
     if (inString) {
       current += char;
       if (char === stringChar) {
-        // SQL uses doubled quotes for escaping (e.g., 'it''s' or "he said ""hi""")
         if (sql[i + 1] === stringChar) {
-          // Include the escaped quote and skip past it
           current += sql[++i];
         } else {
           inString = false;
@@ -235,16 +307,55 @@ function splitStatements(sql: string): string[] {
   return statements;
 }
 
-// Get SQLite version from better-sqlite3
-function getSqliteVersion(): string {
-  const db = new Database(":memory:");
+/**
+ * Execute SQL in a worker thread with timeout protection.
+ * Falls back to direct execution if worker fails to load.
+ */
+async function executeInWorker(
+  input: WorkerInput,
+  timeoutMs: number,
+): Promise<WorkerOutput> {
+  // Try to use worker thread for timeout protection
   try {
-    const result = db.prepare("SELECT sqlite_version()").get() as {
-      "sqlite_version()": string;
-    };
-    return result["sqlite_version()"];
-  } finally {
-    db.close();
+    const workerPath = fileURLToPath(new URL("./worker.js", import.meta.url));
+
+    return await new Promise((resolve, reject) => {
+      const worker = new Worker(workerPath, {
+        workerData: input,
+      });
+
+      const timeout = setTimeout(() => {
+        worker.terminate();
+        resolve({
+          success: false,
+          error: `Query timeout: execution exceeded ${timeoutMs}ms limit`,
+        });
+      }, timeoutMs);
+
+      worker.on("message", (result: WorkerOutput) => {
+        clearTimeout(timeout);
+        resolve(result);
+      });
+
+      worker.on("error", (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
+
+      worker.on("exit", (code) => {
+        clearTimeout(timeout);
+        if (code !== 0) {
+          resolve({
+            success: false,
+            error: `Worker exited with code ${code}`,
+          });
+        }
+      });
+    });
+  } catch {
+    // Worker failed to load (e.g., in test environment with TypeScript)
+    // Fall back to direct execution (no timeout protection)
+    return executeDirectly(input);
   }
 }
 
@@ -292,22 +403,16 @@ export const sqlite3Command: Command = {
       };
     }
 
-    // Open database
-    let db: Database.Database;
+    // Load database buffer
     const isMemory = database === ":memory:";
     let dbPath = "";
+    let dbBuffer: Uint8Array | null = null;
 
     try {
-      if (isMemory) {
-        db = new Database(":memory:");
-      } else {
+      if (!isMemory) {
         dbPath = ctx.fs.resolvePath(ctx.cwd, database);
         if (await ctx.fs.exists(dbPath)) {
-          const buffer = await ctx.fs.readFileBuffer(dbPath);
-          db = new Database(Buffer.from(buffer));
-        } else {
-          // Create new database in memory (will be written on first modification)
-          db = new Database(":memory:");
+          dbBuffer = await ctx.fs.readFileBuffer(dbPath);
         }
       }
     } catch (e) {
@@ -318,6 +423,40 @@ export const sqlite3Command: Command = {
       };
     }
 
+    // Get timeout from execution limits or use default
+    const timeoutMs =
+      ctx.limits?.maxSqliteTimeoutMs ?? DEFAULT_QUERY_TIMEOUT_MS;
+
+    // Execute in worker with timeout
+    const workerInput: WorkerInput = {
+      dbBuffer,
+      sql,
+      options: {
+        bail: options.bail,
+        echo: options.echo,
+      },
+    };
+
+    let result: WorkerOutput;
+    try {
+      result = await executeInWorker(workerInput, timeoutMs);
+    } catch (e) {
+      return {
+        stdout: "",
+        stderr: `sqlite3: worker error: ${(e as Error).message}\n`,
+        exitCode: 1,
+      };
+    }
+
+    if (!result.success) {
+      return {
+        stdout: "",
+        stderr: `sqlite3: ${result.error}\n`,
+        exitCode: 1,
+      };
+    }
+
+    // Format output
     const formatOptions: FormatOptions = {
       mode: options.mode,
       header: options.header,
@@ -327,65 +466,55 @@ export const sqlite3Command: Command = {
     };
 
     let stdout = "";
-    let hasModifications = false;
 
     // Echo SQL if requested
     if (options.echo) {
       stdout += `${sql}\n`;
     }
 
-    try {
-      const statements = splitStatements(sql);
-
-      for (const stmt of statements) {
-        try {
-          if (isWriteStatement(stmt)) {
-            db.exec(stmt);
-            hasModifications = true;
-          } else {
-            // SELECT or other read statements
-            const prepared = db.prepare(stmt);
-            const columnInfo = prepared.columns();
-            const columns = columnInfo.map((c) => c.name);
-
-            // Use raw mode to get arrays instead of objects
-            const rows = prepared.raw(true).all() as unknown[][];
-
-            if (rows.length > 0 || options.header) {
-              stdout += formatOutput(columns, rows, formatOptions);
-            }
-          }
-        } catch (e) {
-          const msg = (e as Error).message;
-          if (options.bail) {
-            return {
-              stdout,
-              stderr: `Error: ${msg}\n`,
-              exitCode: 1,
-            };
-          }
-          // For non-bail mode, continue with next statement
-          stdout += `Error: ${msg}\n`;
-        }
-      }
-
-      // Write back modifications if needed
-      if (hasModifications && !options.readonly && !isMemory && dbPath) {
-        try {
-          const buffer = db.serialize();
-          await ctx.fs.writeFile(dbPath, buffer);
-        } catch (e) {
+    // Process results
+    let hadError = false;
+    for (const stmtResult of result.results) {
+      if (stmtResult.type === "error") {
+        if (options.bail) {
           return {
             stdout,
-            stderr: `sqlite3: failed to write database: ${(e as Error).message}\n`,
+            stderr: `Error: ${stmtResult.error}\n`,
             exitCode: 1,
           };
         }
+        stdout += `Error: ${stmtResult.error}\n`;
+        hadError = true;
+      } else if (stmtResult.columns && stmtResult.rows) {
+        if (stmtResult.rows.length > 0 || options.header) {
+          stdout += formatOutput(
+            stmtResult.columns,
+            stmtResult.rows,
+            formatOptions,
+          );
+        }
       }
-
-      return { stdout, stderr: "", exitCode: 0 };
-    } finally {
-      db.close();
     }
+
+    // Write back modifications if needed
+    if (
+      result.hasModifications &&
+      !options.readonly &&
+      !isMemory &&
+      dbPath &&
+      result.dbBuffer
+    ) {
+      try {
+        await ctx.fs.writeFile(dbPath, result.dbBuffer);
+      } catch (e) {
+        return {
+          stdout,
+          stderr: `sqlite3: failed to write database: ${(e as Error).message}\n`,
+          exitCode: 1,
+        };
+      }
+    }
+
+    return { stdout, stderr: "", exitCode: hadError && options.bail ? 1 : 0 };
   },
 };

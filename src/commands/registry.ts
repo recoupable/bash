@@ -10,7 +10,7 @@ interface LazyCommandDef<T extends string = string> {
   load: CommandLoader;
 }
 
-/** All available built-in command names (excludes network commands like curl) */
+/** All available built-in command names (excludes network and sqlite commands) */
 export type CommandName =
   | "echo"
   | "cat"
@@ -88,14 +88,19 @@ export type CommandName =
   | "gunzip"
   | "zcat"
   | "yq"
-  | "xan"
-  | "sqlite3";
+  | "xan";
 
 /** Network command names (only available when network is configured) */
 export type NetworkCommandName = "curl";
 
-/** All command names including network commands */
-export type AllCommandName = CommandName | NetworkCommandName;
+/** SQLite command names (only available when sqlite is enabled) */
+export type SqliteCommandName = "sqlite3";
+
+/** All command names including network and sqlite commands */
+export type AllCommandName =
+  | CommandName
+  | NetworkCommandName
+  | SqliteCommandName;
 
 // Statically analyzable loaders - each import() call is a literal string
 const commandLoaders: LazyCommandDef<CommandName>[] = [
@@ -440,7 +445,7 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
   },
 ];
 
-// yq requires native parsers (fast-xml-parser, etc.) that don't work in browsers
+// yq and xan require native parsers that don't work in browsers
 // __BROWSER__ is defined by esbuild at build time for browser bundles
 declare const __BROWSER__: boolean | undefined;
 if (typeof __BROWSER__ === "undefined" || !__BROWSER__) {
@@ -452,10 +457,6 @@ if (typeof __BROWSER__ === "undefined" || !__BROWSER__) {
     name: "xan" as CommandName,
     load: async () => (await import("./xan/xan.js")).xanCommand,
   });
-  commandLoaders.push({
-    name: "sqlite3" as CommandName,
-    load: async () => (await import("./sqlite3/sqlite3.js")).sqlite3Command,
-  });
 }
 
 // Network commands - only registered when network is configured
@@ -465,6 +466,19 @@ const networkCommandLoaders: LazyCommandDef<NetworkCommandName>[] = [
     load: async () => (await import("./curl/curl.js")).curlCommand,
   },
 ];
+
+// SQLite commands - only registered when sqlite is enabled
+// Requires better-sqlite3 native module, not available in browsers
+const sqliteCommandLoaders: LazyCommandDef<SqliteCommandName>[] =
+  typeof __BROWSER__ === "undefined" || !__BROWSER__
+    ? [
+        {
+          name: "sqlite3",
+          load: async () =>
+            (await import("./sqlite3/sqlite3.js")).sqlite3Command,
+        },
+      ]
+    : [];
 
 // Cache for loaded commands
 const cache = new Map<string, Command>();
@@ -489,7 +503,7 @@ function createLazyCommand(def: LazyCommandDef): Command {
 }
 
 /**
- * Gets all available command names (excludes network commands)
+ * Gets all available command names (excludes network and sqlite commands)
  */
 export function getCommandNames(): string[] {
   return commandLoaders.map((def) => def.name);
@@ -519,6 +533,21 @@ export function createLazyCommands(filter?: CommandName[]): Command[] {
  */
 export function createNetworkCommands(): Command[] {
   return networkCommandLoaders.map(createLazyCommand);
+}
+
+/**
+ * Gets all sqlite command names
+ */
+export function getSqliteCommandNames(): string[] {
+  return sqliteCommandLoaders.map((def) => def.name);
+}
+
+/**
+ * Creates sqlite commands for registration (sqlite3, etc.)
+ * These are only registered when sqlite is explicitly enabled.
+ */
+export function createSqliteCommands(): Command[] {
+  return sqliteCommandLoaders.map(createLazyCommand);
 }
 
 /**
