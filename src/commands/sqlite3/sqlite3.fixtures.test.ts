@@ -9,7 +9,7 @@ describe("sqlite3 with fixtures", () => {
   describe("users.db", () => {
     it("should query all users", async () => {
       const fs = new OverlayFs({ root: fixturesDir });
-      const env = new Bash({ fs, cwd: fs.getMountPoint(), sqlite: true });
+      const env = new Bash({ fs, cwd: fs.getMountPoint() });
 
       const result = await env.exec('sqlite3 users.db "SELECT * FROM users"');
       expect(result.stdout).toBe(
@@ -23,7 +23,7 @@ describe("sqlite3 with fixtures", () => {
 
     it("should filter users with WHERE clause", async () => {
       const fs = new OverlayFs({ root: fixturesDir });
-      const env = new Bash({ fs, cwd: fs.getMountPoint(), sqlite: true });
+      const env = new Bash({ fs, cwd: fs.getMountPoint() });
 
       const result = await env.exec(
         'sqlite3 users.db "SELECT name, age FROM users WHERE active = 1 ORDER BY age"',
@@ -34,7 +34,7 @@ describe("sqlite3 with fixtures", () => {
 
     it("should aggregate users with COUNT", async () => {
       const fs = new OverlayFs({ root: fixturesDir });
-      const env = new Bash({ fs, cwd: fs.getMountPoint(), sqlite: true });
+      const env = new Bash({ fs, cwd: fs.getMountPoint() });
 
       const result = await env.exec(
         'sqlite3 users.db "SELECT COUNT(*) FROM users WHERE active = 1"',
@@ -45,7 +45,7 @@ describe("sqlite3 with fixtures", () => {
 
     it("should output users as JSON", async () => {
       const fs = new OverlayFs({ root: fixturesDir });
-      const env = new Bash({ fs, cwd: fs.getMountPoint(), sqlite: true });
+      const env = new Bash({ fs, cwd: fs.getMountPoint() });
 
       const result = await env.exec(
         'sqlite3 -json users.db "SELECT id, name FROM users WHERE id = 1"',
@@ -58,7 +58,7 @@ describe("sqlite3 with fixtures", () => {
   describe("products.db", () => {
     it("should query all products", async () => {
       const fs = new OverlayFs({ root: fixturesDir });
-      const env = new Bash({ fs, cwd: fs.getMountPoint(), sqlite: true });
+      const env = new Bash({ fs, cwd: fs.getMountPoint() });
 
       const result = await env.exec(
         'sqlite3 products.db "SELECT name, price FROM products ORDER BY price DESC"',
@@ -72,7 +72,7 @@ describe("sqlite3 with fixtures", () => {
 
     it("should join products with categories", async () => {
       const fs = new OverlayFs({ root: fixturesDir });
-      const env = new Bash({ fs, cwd: fs.getMountPoint(), sqlite: true });
+      const env = new Bash({ fs, cwd: fs.getMountPoint() });
 
       const result = await env.exec(
         "sqlite3 products.db \"SELECT p.name, c.name FROM products p JOIN categories c ON p.category_id = c.id WHERE c.name = 'Electronics' ORDER BY p.name\"",
@@ -85,7 +85,7 @@ describe("sqlite3 with fixtures", () => {
 
     it("should calculate sum with GROUP BY", async () => {
       const fs = new OverlayFs({ root: fixturesDir });
-      const env = new Bash({ fs, cwd: fs.getMountPoint(), sqlite: true });
+      const env = new Bash({ fs, cwd: fs.getMountPoint() });
 
       const result = await env.exec(
         'sqlite3 -header products.db "SELECT c.name, SUM(p.price) as total FROM products p JOIN categories c ON p.category_id = c.id GROUP BY c.name ORDER BY total DESC"',
@@ -97,7 +97,7 @@ describe("sqlite3 with fixtures", () => {
 
     it("should output products in box mode", async () => {
       const fs = new OverlayFs({ root: fixturesDir });
-      const env = new Bash({ fs, cwd: fs.getMountPoint(), sqlite: true });
+      const env = new Bash({ fs, cwd: fs.getMountPoint() });
 
       const result = await env.exec(
         'sqlite3 -box products.db "SELECT id, name FROM products WHERE id <= 2"',
@@ -113,7 +113,7 @@ describe("sqlite3 with fixtures", () => {
   describe("datatypes.db", () => {
     it("should handle NULL values", async () => {
       const fs = new OverlayFs({ root: fixturesDir });
-      const env = new Bash({ fs, cwd: fs.getMountPoint(), sqlite: true });
+      const env = new Bash({ fs, cwd: fs.getMountPoint() });
 
       const result = await env.exec(
         'sqlite3 -nullvalue "NULL" datatypes.db "SELECT int_val, real_val, text_val FROM mixed WHERE id = 2"',
@@ -124,7 +124,7 @@ describe("sqlite3 with fixtures", () => {
 
     it("should handle different numeric types", async () => {
       const fs = new OverlayFs({ root: fixturesDir });
-      const env = new Bash({ fs, cwd: fs.getMountPoint(), sqlite: true });
+      const env = new Bash({ fs, cwd: fs.getMountPoint() });
 
       const result = await env.exec(
         'sqlite3 -json datatypes.db "SELECT int_val, real_val FROM mixed WHERE id IN (1, 3, 4) ORDER BY id"',
@@ -139,7 +139,7 @@ describe("sqlite3 with fixtures", () => {
 
     it("should handle empty strings vs NULL", async () => {
       const fs = new OverlayFs({ root: fixturesDir });
-      const env = new Bash({ fs, cwd: fs.getMountPoint(), sqlite: true });
+      const env = new Bash({ fs, cwd: fs.getMountPoint() });
 
       const result = await env.exec(
         'sqlite3 -nullvalue "NULL" datatypes.db "SELECT id, text_val FROM mixed WHERE text_val IS NULL OR text_val = \'\' ORDER BY id"',
@@ -152,7 +152,7 @@ describe("sqlite3 with fixtures", () => {
   describe("read-only access", () => {
     it("should not modify fixture with -readonly", async () => {
       const fs = new OverlayFs({ root: fixturesDir });
-      const env = new Bash({ fs, cwd: fs.getMountPoint(), sqlite: true });
+      const env = new Bash({ fs, cwd: fs.getMountPoint() });
 
       // Try to insert with readonly
       await env.exec(
@@ -169,7 +169,7 @@ describe("sqlite3 with fixtures", () => {
 
     it("should allow writes to overlay (not persisted to disk)", async () => {
       const fs = new OverlayFs({ root: fixturesDir });
-      const env = new Bash({ fs, cwd: fs.getMountPoint(), sqlite: true });
+      const env = new Bash({ fs, cwd: fs.getMountPoint() });
 
       // Insert new user
       await env.exec(
@@ -188,7 +188,7 @@ describe("sqlite3 with fixtures", () => {
   describe("schema queries", () => {
     it("should list tables", async () => {
       const fs = new OverlayFs({ root: fixturesDir });
-      const env = new Bash({ fs, cwd: fs.getMountPoint(), sqlite: true });
+      const env = new Bash({ fs, cwd: fs.getMountPoint() });
 
       const result = await env.exec(
         "sqlite3 products.db \"SELECT name FROM sqlite_master WHERE type='table' ORDER BY name\"",
@@ -199,7 +199,7 @@ describe("sqlite3 with fixtures", () => {
 
     it("should describe table schema", async () => {
       const fs = new OverlayFs({ root: fixturesDir });
-      const env = new Bash({ fs, cwd: fs.getMountPoint(), sqlite: true });
+      const env = new Bash({ fs, cwd: fs.getMountPoint() });
 
       const result = await env.exec(
         'sqlite3 users.db "PRAGMA table_info(users)"',

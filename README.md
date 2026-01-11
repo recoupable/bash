@@ -245,7 +245,7 @@ pnpm shell --no-network
 
 ### Data Processing
 
-`jq` (JSON), `sqlite3` (SQLite, requires opt-in), `xan` (CSV), `yq` (YAML/XML/TOML/CSV)
+`jq` (JSON), `sqlite3` (SQLite), `xan` (CSV), `yq` (YAML/XML/TOML/CSV)
 
 ### Compression
 
@@ -324,10 +324,10 @@ const env = new Bash({
 
 ## SQLite Support
 
-SQLite support (the `sqlite3` command) is opt-in because it requires the `better-sqlite3` native module. To enable it:
+The `sqlite3` command uses sql.js (WASM-based SQLite) which is fully sandboxed and cannot access the real filesystem:
 
 ```typescript
-const env = new Bash({ sqlite: true });
+const env = new Bash();
 
 // Query in-memory database
 await env.exec('sqlite3 :memory: "SELECT 1 + 1"');
@@ -336,7 +336,7 @@ await env.exec('sqlite3 :memory: "SELECT 1 + 1"');
 await env.exec('sqlite3 data.db "SELECT * FROM users"');
 ```
 
-**Note:** The `sqlite3` command only exists when `sqlite: true` is set. Without it, `sqlite3` returns "command not found". SQLite is not available in browser environments.
+**Note:** SQLite is not available in browser environments. Queries run in a worker thread with a configurable timeout (default: 5 seconds) to prevent runaway queries from blocking execution.
 
 ### Allow-List Security
 

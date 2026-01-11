@@ -3,10 +3,13 @@
  *
  * This isolates potentially long-running queries so they can be
  * terminated if they exceed the timeout.
+ *
+ * Uses sql.js (WASM-based SQLite) which is fully sandboxed and cannot
+ * access the real filesystem.
  */
 
 import { parentPort, workerData } from "node:worker_threads";
-import Database from "better-sqlite3";
+import initSqlJs, { type Database } from "sql.js";
 
 export interface WorkerInput {
   dbBuffer: Uint8Array | null; // null for :memory:
@@ -47,7 +50,8 @@ function isWriteStatement(sql: string): boolean {
     trimmed.startsWith("CREATE") ||
     trimmed.startsWith("DROP") ||
     trimmed.startsWith("ALTER") ||
-    trimmed.startsWith("REPLACE")
+    trimmed.startsWith("REPLACE") ||
+    trimmed.startsWith("VACUUM")
   );
 }
 
@@ -88,14 +92,15 @@ function splitStatements(sql: string): string[] {
   return statements;
 }
 
-function executeQuery(data: WorkerInput): WorkerOutput {
-  let db: Database.Database;
+async function executeQuery(data: WorkerInput): Promise<WorkerOutput> {
+  let db: Database;
 
   try {
+    const SQL = await initSqlJs();
     if (data.dbBuffer) {
-      db = new Database(Buffer.from(data.dbBuffer));
+      db = new SQL.Database(data.dbBuffer);
     } else {
-      db = new Database(":memory:");
+      db = new SQL.Database();
     }
   } catch (e) {
     return { success: false, error: (e as Error).message };
@@ -110,14 +115,20 @@ function executeQuery(data: WorkerInput): WorkerOutput {
     for (const stmt of statements) {
       try {
         if (isWriteStatement(stmt)) {
-          db.exec(stmt);
+          db.run(stmt);
           hasModifications = true;
           results.push({ type: "data", columns: [], rows: [] });
         } else {
+          // Use prepared statement to get column names even for empty result sets
           const prepared = db.prepare(stmt);
-          const columnInfo = prepared.columns();
-          const columns = columnInfo.map((c) => c.name);
-          const rows = prepared.raw(true).all() as unknown[][];
+          const columns = prepared.getColumnNames();
+          const rows: unknown[][] = [];
+
+          while (prepared.step()) {
+            rows.push(prepared.get());
+          }
+
+          prepared.free();
           results.push({ type: "data", columns, rows });
         }
       } catch (e) {
@@ -131,7 +142,7 @@ function executeQuery(data: WorkerInput): WorkerOutput {
 
     let resultBuffer: Uint8Array | null = null;
     if (hasModifications) {
-      resultBuffer = db.serialize();
+      resultBuffer = db.export();
     }
 
     db.close();
@@ -144,6 +155,7 @@ function executeQuery(data: WorkerInput): WorkerOutput {
 
 // Execute when run as worker
 if (parentPort && workerData) {
-  const result = executeQuery(workerData as WorkerInput);
-  parentPort.postMessage(result);
+  executeQuery(workerData as WorkerInput).then((result) => {
+    parentPort?.postMessage(result);
+  });
 }

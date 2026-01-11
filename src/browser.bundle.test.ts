@@ -3,9 +3,8 @@
  *
  * These tests verify that the browser bundle:
  * 1. Does not contain Node.js-only imports
- * 2. Does not include browser-excluded commands like yq/xan
+ * 2. Does not include browser-excluded commands like yq/xan/sqlite3
  * 3. Shows helpful error messages for browser-excluded commands
- * 4. sqlite3 is opt-in and not included by default
  */
 
 import { readFileSync } from "node:fs";
@@ -19,15 +18,15 @@ const browserBundlePath = resolve(__dirname, "../dist/bundle/browser.js");
 
 describe("browser bundle safety", () => {
   describe("bundle contents", () => {
-    it("should not contain better-sqlite3 imports", () => {
+    it("should not contain sql.js imports", () => {
       const bundleContent = readFileSync(browserBundlePath, "utf-8");
-      expect(bundleContent).not.toContain("better-sqlite3");
+      expect(bundleContent).not.toContain("sql.js");
     });
 
     it("should not contain sqlite3 command registration", () => {
       const bundleContent = readFileSync(browserBundlePath, "utf-8");
       // The sqlite3 command should not be in the bundle at all
-      // since it's opt-in and excluded via __BROWSER__ flag
+      // since it's excluded via __BROWSER__ flag
       expect(bundleContent).not.toContain('name:"sqlite3"');
       expect(bundleContent).not.toContain("sqlite3Command");
     });
@@ -66,9 +65,8 @@ describe("browser bundle safety", () => {
       expect(BROWSER_EXCLUDED_COMMANDS).toContain("xan");
     });
 
-    it("should NOT include sqlite3 in browser-excluded (it is opt-in)", () => {
-      // sqlite3 is opt-in, not browser-excluded
-      expect(BROWSER_EXCLUDED_COMMANDS).not.toContain("sqlite3");
+    it("should include sqlite3 in browser-excluded commands", () => {
+      expect(BROWSER_EXCLUDED_COMMANDS).toContain("sqlite3");
     });
 
     it("should have browser-excluded commands available in Node.js registry", () => {
@@ -83,18 +81,9 @@ describe("browser bundle safety", () => {
     });
   });
 
-  describe("opt-in commands", () => {
-    it("sqlite3 should not be available by default", async () => {
+  describe("sqlite3 in Node.js", () => {
+    it("sqlite3 should be available by default in Node.js", async () => {
       const bash = new Bash();
-      const result = await bash.exec("sqlite3 :memory: 'SELECT 1'");
-
-      // sqlite3 is opt-in, so it should just be "command not found"
-      expect(result.stderr).toContain("command not found");
-      expect(result.exitCode).toBe(127);
-    });
-
-    it("sqlite3 should be available when sqlite option is enabled", async () => {
-      const bash = new Bash({ sqlite: true });
       const result = await bash.exec("sqlite3 :memory: 'SELECT 1'");
 
       expect(result.stdout).toBe("1\n");
@@ -132,6 +121,23 @@ describe("browser bundle safety", () => {
       const result = await bash.exec("xan count data.csv");
 
       expect(result.stderr).toContain("xan");
+      expect(result.stderr).toContain("not available in browser");
+      expect(result.stderr).toContain("Exclude");
+      expect(result.exitCode).toBe(127);
+    });
+
+    it("should show helpful error when sqlite3 is used but not available", async () => {
+      const availableCommands = getCommandNames().filter(
+        (cmd) => cmd !== "sqlite3",
+      ) as import("./commands/registry.js").CommandName[];
+
+      const bash = new Bash({
+        commands: availableCommands,
+      });
+
+      const result = await bash.exec("sqlite3 :memory: 'SELECT 1'");
+
+      expect(result.stderr).toContain("sqlite3");
       expect(result.stderr).toContain("not available in browser");
       expect(result.stderr).toContain("Exclude");
       expect(result.exitCode).toBe(127);

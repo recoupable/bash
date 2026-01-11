@@ -5,9 +5,6 @@
  * - Use Node.js-specific APIs that don't have browser equivalents
  * - Have dependencies that don't work in browsers
  *
- * Note: sqlite3 is opt-in (requires `sqlite: true` option) so it's not
- * listed here - it will show "command not found" like any other unknown command.
- *
  * When a user tries to use one of these commands in a browser environment,
  * they should get a helpful error message explaining why the command
  * is not available.
@@ -15,6 +12,7 @@
 export const BROWSER_EXCLUDED_COMMANDS: readonly string[] = [
   "yq", // Requires fast-xml-parser and other Node.js-specific parsing
   "xan", // Complex CSV/data processing with Node.js dependencies
+  "sqlite3", // Uses sql.js (WASM) which requires Node.js worker threads
 ] as const;
 
 /**

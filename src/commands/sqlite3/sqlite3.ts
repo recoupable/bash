@@ -1,16 +1,19 @@
 /**
  * sqlite3 - SQLite database CLI
  *
- * Wraps better-sqlite3 to provide SQLite database access through the virtual filesystem.
+ * Wraps sql.js (WASM) to provide SQLite database access through the virtual filesystem.
  * Databases are loaded from buffers and written back after modifications.
  *
  * Queries run in a worker thread with a timeout to prevent runaway queries
  * (e.g., infinite recursive CTEs) from blocking execution.
+ *
+ * Security: sql.js is fully sandboxed - it cannot access the real filesystem,
+ * making ATTACH DATABASE and VACUUM INTO safe (they only operate on virtual buffers).
  */
 
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
-import Database from "better-sqlite3";
+import initSqlJs, { type Database } from "sql.js";
 import type { Command, CommandContext, ExecResult } from "../../types.js";
 import { hasHelpFlag, showHelp } from "../help.js";
 import {
@@ -186,74 +189,18 @@ function parseArgs(args: string[]):
   return { options, database, sql, showVersion };
 }
 
-// Get SQLite version from better-sqlite3
-function getSqliteVersion(): string {
-  const db = new Database(":memory:");
+// Get SQLite version from sql.js
+async function getSqliteVersion(): Promise<string> {
+  const SQL = await initSqlJs();
+  const db = new SQL.Database();
   try {
-    const result = db.prepare("SELECT sqlite_version()").get() as {
-      "sqlite_version()": string;
-    };
-    return result["sqlite_version()"];
+    const result = db.exec("SELECT sqlite_version()");
+    if (result.length > 0 && result[0].values.length > 0) {
+      return String(result[0].values[0][0]);
+    }
+    return "unknown";
   } finally {
     db.close();
-  }
-}
-
-/**
- * Execute SQL directly (synchronous, no timeout protection).
- * Used as fallback when worker threads aren't available.
- */
-function executeDirectly(input: WorkerInput): WorkerOutput {
-  let db: Database.Database;
-
-  try {
-    if (input.dbBuffer) {
-      db = new Database(Buffer.from(input.dbBuffer));
-    } else {
-      db = new Database(":memory:");
-    }
-  } catch (e) {
-    return { success: false, error: (e as Error).message };
-  }
-
-  const results: import("./worker.js").StatementResult[] = [];
-  let hasModifications = false;
-
-  try {
-    const statements = splitStatements(input.sql);
-
-    for (const stmt of statements) {
-      try {
-        if (isWriteStatement(stmt)) {
-          db.exec(stmt);
-          hasModifications = true;
-          results.push({ type: "data", columns: [], rows: [] });
-        } else {
-          const prepared = db.prepare(stmt);
-          const columnInfo = prepared.columns();
-          const columns = columnInfo.map((c) => c.name);
-          const rows = prepared.raw(true).all() as unknown[][];
-          results.push({ type: "data", columns, rows });
-        }
-      } catch (e) {
-        const error = (e as Error).message;
-        results.push({ type: "error", error });
-        if (input.options.bail) {
-          break;
-        }
-      }
-    }
-
-    let resultBuffer: Uint8Array | null = null;
-    if (hasModifications) {
-      resultBuffer = db.serialize();
-    }
-
-    db.close();
-    return { success: true, results, hasModifications, dbBuffer: resultBuffer };
-  } catch (e) {
-    db.close();
-    return { success: false, error: (e as Error).message };
   }
 }
 
@@ -266,7 +213,8 @@ function isWriteStatement(sql: string): boolean {
     trimmed.startsWith("CREATE") ||
     trimmed.startsWith("DROP") ||
     trimmed.startsWith("ALTER") ||
-    trimmed.startsWith("REPLACE")
+    trimmed.startsWith("REPLACE") ||
+    trimmed.startsWith("VACUUM")
   );
 }
 
@@ -305,6 +253,71 @@ function splitStatements(sql: string): string[] {
   if (stmt) statements.push(stmt);
 
   return statements;
+}
+
+/**
+ * Execute SQL directly (no timeout protection).
+ * Used as fallback when worker threads aren't available.
+ */
+async function executeDirectly(input: WorkerInput): Promise<WorkerOutput> {
+  let db: Database;
+
+  try {
+    const SQL = await initSqlJs();
+    if (input.dbBuffer) {
+      db = new SQL.Database(input.dbBuffer);
+    } else {
+      db = new SQL.Database();
+    }
+  } catch (e) {
+    return { success: false, error: (e as Error).message };
+  }
+
+  const results: import("./worker.js").StatementResult[] = [];
+  let hasModifications = false;
+
+  try {
+    const statements = splitStatements(input.sql);
+
+    for (const stmt of statements) {
+      try {
+        if (isWriteStatement(stmt)) {
+          db.run(stmt);
+          hasModifications = true;
+          results.push({ type: "data", columns: [], rows: [] });
+        } else {
+          // Use prepared statement to get column names even for empty result sets
+          const prepared = db.prepare(stmt);
+          const columns = prepared.getColumnNames();
+          const rows: unknown[][] = [];
+
+          while (prepared.step()) {
+            rows.push(prepared.get());
+          }
+
+          prepared.free();
+          results.push({ type: "data", columns, rows });
+        }
+      } catch (e) {
+        const error = (e as Error).message;
+        results.push({ type: "error", error });
+        if (input.options.bail) {
+          break;
+        }
+      }
+    }
+
+    let resultBuffer: Uint8Array | null = null;
+    if (hasModifications) {
+      resultBuffer = db.export();
+    }
+
+    db.close();
+    return { success: true, results, hasModifications, dbBuffer: resultBuffer };
+  } catch (e) {
+    db.close();
+    return { success: false, error: (e as Error).message };
+  }
 }
 
 /**
@@ -374,7 +387,7 @@ export const sqlite3Command: Command = {
 
     // Handle -version
     if (showVersion) {
-      const version = getSqliteVersion();
+      const version = await getSqliteVersion();
       return {
         stdout: `${version}\n`,
         stderr: "",

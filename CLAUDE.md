@@ -183,6 +183,6 @@ When adding comparison tests:
 - Always verify with `pnpm typecheck && pnpm lint:fix && pnpm knip && pnpm test:run` before finishing
 - Assert full stdout/stderr in tests, not partial matches
 - Implementation must match real bash behavior, not convenience
-- Dependencies using WASM are not allowed
+- Dependencies using WASM are not allowed (exception: sql.js for SQLite, approved for security sandboxing)
 - We explicitly don't support 64-bit integers
 - All parsing/execution must have reasonable limits to prevent runaway compute

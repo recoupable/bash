@@ -13,7 +13,6 @@ import {
   type CommandName,
   createLazyCommands,
   createNetworkCommands,
-  createSqliteCommands,
 } from "./commands/registry.js";
 import {
   type CustomCommand,
@@ -82,12 +81,6 @@ export interface BashOptions {
    * Network access is disabled by default - you must explicitly configure allowed URLs.
    */
   network?: NetworkConfig;
-  /**
-   * Enable SQLite support (sqlite3 command).
-   * Disabled by default because it requires the better-sqlite3 native module.
-   * Not available in browser environments.
-   */
-  sqlite?: boolean;
   /**
    * Optional list of command names to register.
    * If not provided, all built-in commands are available.
@@ -246,13 +239,6 @@ export class Bash {
     // Register network commands only when network is configured
     if (options.network) {
       for (const cmd of createNetworkCommands()) {
-        this.registerCommand(cmd);
-      }
-    }
-
-    // Register sqlite commands only when sqlite is enabled
-    if (options.sqlite) {
-      for (const cmd of createSqliteCommands()) {
         this.registerCommand(cmd);
       }
     }
