@@ -1,6 +1,6 @@
-# just-bash Code Explorer Agent
+# File Explorer Agent
 
-An interactive AI agent that lets you chat about the just-bash codebase using natural language.
+An interactive AI agent that lets you explore files and directories using natural language.
 
 Uses [bash-tool](https://github.com/vercel-labs/bash-tool) for the AI SDK integration.
 
@@ -31,12 +31,21 @@ Uses [bash-tool](https://github.com/vercel-labs/bash-tool) for the AI SDK integr
 
 ## Usage
 
+```bash
+# Explore a specific directory
+npx tsx main.ts /path/to/directory
+
+# Explore the just-bash project (default)
+npx tsx main.ts
+```
+
 Ask questions like:
 
-- "What commands are available?"
-- "How is the grep command implemented?"
-- "Show me the Bash class"
-- "Find all test files"
+- "What files are in here?"
+- "Show me the contents of config.json"
+- "Find all CSV files"
+- "How many lines are in each file?"
+- "Search for 'TODO' in the code"
 
 Type `exit` to quit.
 

@@ -236,12 +236,72 @@ describe("jq", () => {
     });
   });
 
+  describe("JSON stream parsing (concatenated JSON)", () => {
+    it("should handle concatenated pretty-printed JSON objects with -s", async () => {
+      const env = new Bash({
+        files: {
+          "/file1.json": '{\n  "id": 1,\n  "merged": true\n}',
+          "/file2.json": '{\n  "id": 2,\n  "merged": false\n}',
+          "/file3.json": '{\n  "id": 3,\n  "merged": true\n}',
+        },
+      });
+      // This simulates: cat file1.json file2.json file3.json | jq -s 'group_by(.merged)'
+      const result = await env.exec(
+        "cat /file1.json /file2.json /file3.json | jq -s 'group_by(.merged) | map({merged: .[0].merged, count: length})'",
+      );
+      expect(result.exitCode).toBe(0);
+      const output = JSON.parse(result.stdout);
+      // group_by sorts by key: false < true (alphabetically)
+      expect(output).toEqual([
+        { merged: true, count: 2 },
+        { merged: false, count: 1 },
+      ]);
+    });
+
+    it("should handle concatenated compact JSON objects without -s", async () => {
+      const env = new Bash({
+        files: {
+          "/data.json": '{"a":1}{"b":2}{"c":3}',
+        },
+      });
+      const result = await env.exec("cat /data.json | jq '.'");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toBe(
+        '{\n  "a": 1\n}\n{\n  "b": 2\n}\n{\n  "c": 3\n}\n',
+      );
+    });
+
+    it("should handle mixed JSON values in stream", async () => {
+      const env = new Bash({
+        files: {
+          "/mixed.json": '{"obj":true}\n[1,2,3]\n"string"\n42\ntrue\nnull',
+        },
+      });
+      const result = await env.exec("cat /mixed.json | jq -c '.'");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toBe(
+        '{"obj":true}\n[1,2,3]\n"string"\n42\ntrue\nnull\n',
+      );
+    });
+
+    it("should slurp concatenated JSON into array", async () => {
+      const env = new Bash({
+        files: {
+          "/stream.json": '{"x":1}\n{"x":2}\n{"x":3}',
+        },
+      });
+      const result = await env.exec("cat /stream.json | jq -s 'length'");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toBe("3\n");
+    });
+  });
+
   describe("error handling", () => {
     it("should error on invalid JSON", async () => {
       const env = new Bash();
       const result = await env.exec("echo 'not json' | jq '.'");
       expect(result.stderr).toBe(
-        "jq: parse error: Unexpected token 'o', \"not json\" is not valid JSON\n",
+        "jq: parse error: Invalid JSON at position 0: unexpected 'not'\n",
       );
       expect(result.exitCode).toBe(5);
     });

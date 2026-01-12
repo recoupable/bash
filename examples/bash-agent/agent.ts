@@ -1,13 +1,14 @@
 /**
- * Minimal AI agent for exploring the just-bash codebase
+ * Minimal AI agent for exploring codebases
  *
  * This file contains only the agent logic - see shell.ts for the interactive loop.
- * Uses bash-tool with uploadDirectory to provide read access to the real project files.
+ * Uses bash-tool with a just-bash OverlayFS to provide read access to the real project files.
  */
 
 import * as path from "node:path";
 import { streamText, stepCountIs } from "ai";
 import { createBashTool } from "bash-tool";
+import { Bash, OverlayFs } from "just-bash";
 
 export interface AgentRunner {
   chat(
@@ -18,32 +19,61 @@ export interface AgentRunner {
   ): Promise<void>;
 }
 
+export interface CommandResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
 export interface CreateAgentOptions {
+  /** Directory to explore (defaults to just-bash project root) */
+  rootDir?: string;
   onToolCall?: (command: string) => void;
+  onToolResult?: (result: CommandResult) => void;
   onText?: (text: string) => void;
 }
 
 /**
- * Creates an agent runner that can chat about the just-bash codebase
+ * Creates an agent runner that can explore a codebase
  */
 export async function createAgent(
   options: CreateAgentOptions = {}
 ): Promise<AgentRunner> {
-  const projectRoot = path.resolve(import.meta.dirname, "../..");
+  const projectRoot = options.rootDir
+    ? path.resolve(options.rootDir)
+    : path.resolve(import.meta.dirname, "../..");
+
+  // Create OverlayFS with the project root directory
+  const overlayFs = new OverlayFs({
+    root: projectRoot,
+    mountPoint: "/workspace",
+    readOnly: true,
+  });
+
+  // Create Bash instance with the OverlayFS
+  const bash = new Bash({
+    fs: overlayFs,
+    cwd: "/workspace",
+  });
 
   const toolkit = await createBashTool({
-    uploadDirectory: { source: projectRoot },
+    sandbox: bash,
     destination: "/workspace",
-    extraInstructions: `You are exploring the just-bash project - a simulated bash environment in TypeScript.
+    extraInstructions: `You have access to files and directories mounted at /workspace.
 Use bash commands to explore:
-- ls /workspace/src to see the source structure
-- cat /workspace/README.md to read documentation
-- grep -r "pattern" /workspace/src to search code
-- find /workspace -name "*.ts" to find files
+- ls /workspace to see the directory structure
+- cat /workspace/filename to read files
+- grep -r "pattern" /workspace to search content
+- find /workspace -name "*.ext" to find files by pattern
+- head, tail, wc, sort, uniq for data analysis
 
-Help the user understand the codebase, find code, and answer questions.`,
+Help the user explore, search, and understand the contents.`,
     onBeforeBashCall: (input) => {
       options.onToolCall?.(input.command);
+      return undefined;
+    },
+    onAfterBashCall: (input) => {
+      options.onToolResult?.(input.result);
       return undefined;
     },
   });

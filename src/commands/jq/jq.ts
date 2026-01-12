@@ -15,6 +15,96 @@ import {
   type QueryValue,
 } from "../query-engine/index.js";
 
+/**
+ * Parse a JSON stream (concatenated JSON values).
+ * Real jq can handle `{...}{...}` or `{...}\n{...}` or pretty-printed concatenated JSONs.
+ */
+function parseJsonStream(input: string): unknown[] {
+  const results: unknown[] = [];
+  let pos = 0;
+  const len = input.length;
+
+  while (pos < len) {
+    // Skip whitespace
+    while (pos < len && /\s/.test(input[pos])) pos++;
+    if (pos >= len) break;
+
+    const startPos = pos;
+    const char = input[pos];
+
+    if (char === "{" || char === "[") {
+      // Parse object or array by finding matching close bracket
+      const openBracket = char;
+      const closeBracket = char === "{" ? "}" : "]";
+      let depth = 1;
+      let inString = false;
+      let isEscaped = false;
+      pos++;
+
+      while (pos < len && depth > 0) {
+        const c = input[pos];
+        if (isEscaped) {
+          isEscaped = false;
+        } else if (c === "\\") {
+          isEscaped = true;
+        } else if (c === '"') {
+          inString = !inString;
+        } else if (!inString) {
+          if (c === openBracket) depth++;
+          else if (c === closeBracket) depth--;
+        }
+        pos++;
+      }
+
+      if (depth !== 0) {
+        throw new Error(
+          `Unexpected end of JSON input at position ${pos} (unclosed ${openBracket})`,
+        );
+      }
+
+      results.push(JSON.parse(input.slice(startPos, pos)));
+    } else if (char === '"') {
+      // Parse string
+      let isEscaped = false;
+      pos++;
+      while (pos < len) {
+        const c = input[pos];
+        if (isEscaped) {
+          isEscaped = false;
+        } else if (c === "\\") {
+          isEscaped = true;
+        } else if (c === '"') {
+          pos++;
+          break;
+        }
+        pos++;
+      }
+      results.push(JSON.parse(input.slice(startPos, pos)));
+    } else if (char === "-" || (char >= "0" && char <= "9")) {
+      // Parse number
+      while (pos < len && /[\d.eE+-]/.test(input[pos])) pos++;
+      results.push(JSON.parse(input.slice(startPos, pos)));
+    } else if (input.slice(pos, pos + 4) === "true") {
+      results.push(true);
+      pos += 4;
+    } else if (input.slice(pos, pos + 5) === "false") {
+      results.push(false);
+      pos += 5;
+    } else if (input.slice(pos, pos + 4) === "null") {
+      results.push(null);
+      pos += 4;
+    } else {
+      // Try to provide context about what we found
+      const context = input.slice(pos, pos + 10);
+      throw new Error(
+        `Invalid JSON at position ${startPos}: unexpected '${context.split(/\s/)[0]}'`,
+      );
+    }
+  }
+
+  return results;
+}
+
 const jqHelp = {
   name: "jq",
   summary: "command-line JSON processor",
@@ -192,38 +282,25 @@ export const jqCommand: Command = {
         values = evaluate(null, ast, evalOptions);
       } else if (slurp) {
         // Slurp mode: combine all inputs into single array
+        // Use JSON stream parser to handle concatenated JSON (not just NDJSON)
         const items: QueryValue[] = [];
         for (const { content } of inputs) {
-          for (const line of content.trim().split("\n")) {
-            if (line.trim()) items.push(JSON.parse(line));
+          const trimmed = content.trim();
+          if (trimmed) {
+            items.push(...parseJsonStream(trimmed));
           }
         }
         values = evaluate(items, ast, evalOptions);
       } else {
-        // Helper to parse content line by line (for NDJSON or non-JSON-object/array files)
-        const parseLineByLine = (trimmed: string): void => {
-          for (const line of trimmed.split("\n")) {
-            if (line.trim()) {
-              values.push(...evaluate(JSON.parse(line), ast, evalOptions));
-            }
-          }
-        };
-
         // Process each input file separately
+        // Use JSON stream parser to handle concatenated JSON (e.g., cat file1.json file2.json | jq .)
         for (const { content } of inputs) {
           const trimmed = content.trim();
           if (!trimmed) continue;
 
-          if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-            // Try to parse as single JSON value first
-            try {
-              values.push(...evaluate(JSON.parse(trimmed), ast, evalOptions));
-            } catch {
-              // If that fails (e.g., NDJSON file), parse line by line
-              parseLineByLine(trimmed);
-            }
-          } else {
-            parseLineByLine(trimmed);
+          const jsonValues = parseJsonStream(trimmed);
+          for (const jsonValue of jsonValues) {
+            values.push(...evaluate(jsonValue, ast, evalOptions));
           }
         }
       }

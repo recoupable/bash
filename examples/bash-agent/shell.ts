@@ -1,5 +1,5 @@
 /**
- * Interactive shell for the just-bash code explorer agent
+ * Interactive shell for the code explorer agent
  */
 
 import * as readline from "node:readline";
@@ -15,17 +15,24 @@ const colors = {
   blue: "\x1b[34m",
 };
 
-export function runShell(agent: AgentRunner): void {
+export interface ShellOptions {
+  /** Directory being explored (for display purposes) */
+  rootDir?: string;
+}
+
+export function runShell(agent: AgentRunner, options: ShellOptions = {}): void {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
+  const dirDisplay = options.rootDir || "just-bash project";
   console.log(`${colors.cyan}${colors.bold}╔══════════════════════════════════════════════════════════════╗
-║              just-bash Code Explorer Agent                     ║
-║         Ask questions about the codebase!                     ║
+║                     File Explorer Agent                        ║
+║           Ask questions about files and data!                  ║
 ╚══════════════════════════════════════════════════════════════╝${colors.reset}
 `);
+  console.log(`${colors.dim}Exploring: ${colors.reset}${colors.cyan}${dirDisplay}${colors.reset}`);
   console.log(
     `${colors.dim}Type your question and press Enter. Type 'exit' to quit.${colors.reset}\n`
   );
