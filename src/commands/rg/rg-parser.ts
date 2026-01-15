@@ -4,7 +4,6 @@
 
 import type { ExecResult } from "../../types.js";
 import { unknownOption } from "../help.js";
-import { FILE_TYPES } from "./file-types.js";
 import { createDefaultOptions, type RgOptions } from "./rg-options.js";
 
 export interface ParseResult {
@@ -22,16 +21,49 @@ export interface ParseError {
 export type ParseArgsResult = ParseResult | ParseError;
 
 /**
- * Validate a file type name
+ * Parse a filesize string (e.g., "10K", "5M", "1G")
  */
-function validateType(typeName: string): ExecResult | null {
-  if (!FILE_TYPES[typeName]) {
+function parseFilesize(value: string): number {
+  const match = value.match(/^(\d+)([KMG])?$/i);
+  if (!match) {
+    return 0; // Invalid format, will be caught by validation
+  }
+  const num = parseInt(match[1], 10);
+  const suffix = (match[2] || "").toUpperCase();
+  switch (suffix) {
+    case "K":
+      return num * 1024;
+    case "M":
+      return num * 1024 * 1024;
+    case "G":
+      return num * 1024 * 1024 * 1024;
+    default:
+      return num;
+  }
+}
+
+/**
+ * Validate a filesize string
+ */
+function validateFilesize(value: string): ExecResult | null {
+  if (!/^\d+[KMG]?$/i.test(value)) {
     return {
       stdout: "",
-      stderr: `rg: unknown type: ${typeName}\nUse --type-list to see available types.\n`,
+      stderr: `rg: invalid --max-filesize value: ${value}\n`,
       exitCode: 1,
     };
   }
+  return null;
+}
+
+/**
+ * Validate a file type name
+ * Note: We don't strictly validate type names because --type-add can define custom types.
+ * If a type doesn't exist (and isn't defined via --type-add), the search will simply
+ * return no matches.
+ */
+function validateType(_typeName: string): ExecResult | null {
+  // Allow all type names - if they don't exist, the search returns no results
   return null;
 }
 
@@ -47,6 +79,7 @@ interface ValueOptDef {
 
 const VALUE_OPTS: ValueOptDef[] = [
   { short: "g", long: "glob", target: "globs", multi: true },
+  { long: "iglob", target: "iglobs", multi: true },
   {
     short: "t",
     long: "type",
@@ -61,12 +94,27 @@ const VALUE_OPTS: ValueOptDef[] = [
     multi: true,
     validate: validateType,
   },
+  { long: "type-add", target: "typeAdd", multi: true },
+  { long: "type-clear", target: "typeClear", multi: true },
   { short: "m", long: "max-count", target: "maxCount", parse: parseInt },
   { short: "e", long: "regexp", target: "patterns", multi: true },
   { short: "f", long: "file", target: "patternFiles", multi: true },
   { short: "r", long: "replace", target: "replace" },
-  { long: "max-depth", target: "maxDepth", parse: parseInt },
+  { short: "d", long: "max-depth", target: "maxDepth", parse: parseInt },
+  {
+    long: "max-filesize",
+    target: "maxFilesize",
+    parse: parseFilesize,
+    validate: validateFilesize,
+  },
   { long: "context-separator", target: "contextSeparator" },
+  // Thread count (no-op in single-threaded environment, but accept the option)
+  { short: "j", long: "threads", target: "maxDepth", parse: () => Infinity }, // Use maxDepth as dummy target (value ignored)
+  // Custom ignore file
+  { long: "ignore-file", target: "ignoreFiles", multi: true },
+  // Preprocessing
+  { long: "pre", target: "preprocessor" },
+  { long: "pre-glob", target: "preprocessorGlobs", multi: true },
 ];
 
 // Declarative boolean flag definitions
@@ -136,6 +184,10 @@ const BOOL_FLAGS: Record<string, BoolFlagHandler> = {
   "--multiline": (o) => {
     o.multiline = true;
   },
+  "--multiline-dotall": (o) => {
+    o.multilineDotall = true;
+    o.multiline = true; // dotall implies multiline
+  },
 
   // Output modes
   c: (o) => {
@@ -150,11 +202,17 @@ const BOOL_FLAGS: Record<string, BoolFlagHandler> = {
   l: (o) => {
     o.filesWithMatches = true;
   },
+  "--files": (o) => {
+    o.files = true;
+  },
   "--files-with-matches": (o) => {
     o.filesWithMatches = true;
   },
   "--files-without-match": (o) => {
     o.filesWithoutMatch = true;
+  },
+  "--stats": (o) => {
+    o.stats = true;
   },
   o: (o) => {
     o.onlyMatching = true;
@@ -178,6 +236,12 @@ const BOOL_FLAGS: Record<string, BoolFlagHandler> = {
   },
 
   // Filename display
+  H: (o) => {
+    o.withFilename = true;
+  },
+  "--with-filename": (o) => {
+    o.withFilename = true;
+  },
   I: (o) => {
     o.noFilename = true;
   },
@@ -202,6 +266,9 @@ const BOOL_FLAGS: Record<string, BoolFlagHandler> = {
     o.column = true;
     o.lineNumber = true;
   },
+  "--no-column": (o) => {
+    o.column = false;
+  },
   "--vimgrep": (o) => {
     o.vimgrep = true;
     o.column = true;
@@ -217,6 +284,12 @@ const BOOL_FLAGS: Record<string, BoolFlagHandler> = {
   },
   "--no-ignore": (o) => {
     o.noIgnore = true;
+  },
+  "--no-ignore-dot": (o) => {
+    o.noIgnoreDot = true;
+  },
+  "--no-ignore-vcs": (o) => {
+    o.noIgnoreVcs = true;
   },
   L: (o) => {
     o.followSymlinks = true;
@@ -246,6 +319,9 @@ const BOOL_FLAGS: Record<string, BoolFlagHandler> = {
   },
   "--include-zero": (o) => {
     o.includeZero = true;
+  },
+  "--glob-case-insensitive": (o) => {
+    o.globCaseInsensitive = true;
   },
 };
 
@@ -282,6 +358,14 @@ function tryParseValueOpt(
       return { newIndex: i };
     }
 
+    // Check -xVALUE form (short option with value attached, e.g., -f-)
+    if (def.short && arg.startsWith(`-${def.short}`) && arg.length > 2) {
+      const value = arg.slice(2);
+      const error = applyValueOpt(options, def, value);
+      if (error) return { newIndex: i, error };
+      return { newIndex: i };
+    }
+
     // Check -x VALUE or --long VALUE form
     if ((def.short && arg === `-${def.short}`) || arg === `--${def.long}`) {
       if (i + 1 >= args.length) return null;
@@ -293,6 +377,13 @@ function tryParseValueOpt(
   }
 
   return null;
+}
+
+/**
+ * Find a value option definition by its short flag
+ */
+function findValueOptByShort(shortFlag: string): ValueOptDef | undefined {
+  return VALUE_OPTS.find((def) => def.short === shortFlag);
 }
 
 /**
@@ -439,6 +530,7 @@ export function parseArgs(args: string[]): ParseArgsResult {
 
       // Parse boolean flags (handles both --flag and -xyz combined)
       const flags = arg.startsWith("--") ? [arg] : arg.slice(1).split("");
+      let consumedNextArg = false;
 
       for (const flag of flags) {
         // Check for line number flags (special case that returns a value)
@@ -452,6 +544,37 @@ export function parseArgs(args: string[]): ParseArgsResult {
         if (flag === "u" || flag === "--unrestricted") {
           handleUnrestricted(options);
           continue;
+        }
+
+        // PCRE2 not supported
+        if (flag === "P" || flag === "--pcre2") {
+          return {
+            success: false,
+            error: {
+              stdout: "",
+              stderr:
+                "rg: PCRE2 is not supported. Use standard regex syntax instead.\n",
+              exitCode: 1,
+            },
+          };
+        }
+
+        // Check if this is a value option short form (e.g., 'f' in '-Ff')
+        if (flag.length === 1) {
+          const valueDef = findValueOptByShort(flag);
+          if (valueDef) {
+            // Value option in combined flags - consume next argument
+            if (i + 1 >= args.length) {
+              return { success: false, error: unknownOption("rg", `-${flag}`) };
+            }
+            const error = applyValueOpt(options, valueDef, args[i + 1]);
+            if (error) {
+              return { success: false, error };
+            }
+            i++;
+            consumedNextArg = true;
+            continue;
+          }
         }
 
         // Try boolean flags
@@ -469,7 +592,15 @@ export function parseArgs(args: string[]): ParseArgsResult {
           return { success: false, error: unknownOption("rg", `-${flag}`) };
         }
       }
-    } else if (positionalPattern === null) {
+      // If we consumed the next arg (for a value option in combined flags),
+      // the outer loop will naturally skip it since i was incremented
+      void consumedNextArg;
+    } else if (
+      positionalPattern === null &&
+      options.patterns.length === 0 &&
+      options.patternFiles.length === 0
+    ) {
+      // First positional arg is pattern only if no -e patterns or -f files provided
       positionalPattern = arg;
     } else {
       paths.push(arg);
