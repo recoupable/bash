@@ -14,11 +14,21 @@ export interface RegexOptions {
   multilineDotall?: boolean;
 }
 
+export interface RegexResult {
+  regex: RegExp;
+  /** If \K was used, this is the 1-based index of the capture group containing the "real" match */
+  kResetGroup?: number;
+}
+
 /**
  * Build a JavaScript RegExp from a pattern with the specified mode
  */
-export function buildRegex(pattern: string, options: RegexOptions): RegExp {
+export function buildRegex(
+  pattern: string,
+  options: RegexOptions,
+): RegexResult {
   let regexPattern: string;
+  let kResetGroup: number | undefined;
 
   switch (options.mode) {
     case "fixed":
@@ -26,10 +36,18 @@ export function buildRegex(pattern: string, options: RegexOptions): RegExp {
       regexPattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       break;
     case "extended":
-    case "perl":
+    case "perl": {
       // Convert (?P<name>...) to JavaScript's (?<name>...) syntax
       regexPattern = pattern.replace(/\(\?P<([^>]+)>/g, "(?<$1>");
+
+      // Handle \K (Perl regex reset match start) - only in perl mode
+      if (options.mode === "perl") {
+        const kResult = handlePerlKReset(regexPattern);
+        regexPattern = kResult.pattern;
+        kResetGroup = kResult.kResetGroup;
+      }
       break;
+    }
     default:
       regexPattern = escapeRegexForBasicGrep(pattern);
       break;
@@ -56,7 +74,137 @@ export function buildRegex(pattern: string, options: RegexOptions): RegExp {
     (options.ignoreCase ? "i" : "") +
     (options.multiline ? "m" : "") +
     (options.multilineDotall ? "s" : "");
-  return new RegExp(regexPattern, flags);
+  return { regex: new RegExp(regexPattern, flags), kResetGroup };
+}
+
+/**
+ * Handle Perl's \K (keep/reset match start) operator.
+ * \K causes everything matched before it to be excluded from the final match result.
+ *
+ * We emulate this by:
+ * 1. Wrapping the part before \K in a non-capturing group
+ * 2. Wrapping the part after \K in a capturing group
+ * 3. Returning the index of that capturing group so the matcher can use it
+ */
+function handlePerlKReset(pattern: string): {
+  pattern: string;
+  kResetGroup?: number;
+} {
+  // Find \K that's not escaped (not preceded by odd number of backslashes)
+  // We need to find \K that represents the reset operator, not a literal \\K
+  const kIndex = findUnescapedK(pattern);
+
+  if (kIndex === -1) {
+    return { pattern };
+  }
+
+  const before = pattern.slice(0, kIndex);
+  const after = pattern.slice(kIndex + 2); // Skip \K
+
+  // Count existing capturing groups before the split to determine our group number
+  const groupsBefore = countCapturingGroups(before);
+
+  // Wrap: (?:before)(after) - non-capturing for prefix, capturing for the part we want
+  const newPattern = `(?:${before})(${after})`;
+
+  return {
+    pattern: newPattern,
+    // The capturing group for "after" will be groupsBefore + 1
+    kResetGroup: groupsBefore + 1,
+  };
+}
+
+/**
+ * Find the index of \K in a pattern, ignoring escaped backslashes
+ */
+function findUnescapedK(pattern: string): number {
+  let i = 0;
+  while (i < pattern.length - 1) {
+    if (pattern[i] === "\\") {
+      if (pattern[i + 1] === "K") {
+        // Check if the backslash itself is escaped by counting preceding backslashes
+        let backslashCount = 0;
+        let j = i - 1;
+        while (j >= 0 && pattern[j] === "\\") {
+          backslashCount++;
+          j--;
+        }
+        // If even number of preceding backslashes, this \K is not escaped
+        if (backslashCount % 2 === 0) {
+          return i;
+        }
+      }
+      // Skip the escaped character
+      i += 2;
+    } else {
+      i++;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Count the number of capturing groups in a regex pattern.
+ * Excludes non-capturing groups (?:...), lookahead (?=...), (?!...),
+ * lookbehind (?<=...), (?<!...), and named groups (?<name>...) which we count.
+ */
+function countCapturingGroups(pattern: string): number {
+  let count = 0;
+  let i = 0;
+
+  while (i < pattern.length) {
+    if (pattern[i] === "\\") {
+      // Skip escaped character
+      i += 2;
+      continue;
+    }
+
+    if (pattern[i] === "[") {
+      // Skip character class
+      i++;
+      while (i < pattern.length && pattern[i] !== "]") {
+        if (pattern[i] === "\\") i++;
+        i++;
+      }
+      i++; // Skip ]
+      continue;
+    }
+
+    if (pattern[i] === "(") {
+      if (i + 1 < pattern.length && pattern[i + 1] === "?") {
+        // Check what kind of group
+        if (i + 2 < pattern.length) {
+          const nextChar = pattern[i + 2];
+          if (nextChar === ":" || nextChar === "=" || nextChar === "!") {
+            // Non-capturing or lookahead - don't count
+            i++;
+            continue;
+          }
+          if (nextChar === "<") {
+            // Could be lookbehind (?<= or (?<! or named group (?<name>
+            if (i + 3 < pattern.length) {
+              const afterLt = pattern[i + 3];
+              if (afterLt === "=" || afterLt === "!") {
+                // Lookbehind - don't count
+                i++;
+                continue;
+              }
+              // Named group - count it
+              count++;
+              i++;
+              continue;
+            }
+          }
+        }
+      } else {
+        // Regular capturing group
+        count++;
+      }
+    }
+    i++;
+  }
+
+  return count;
 }
 
 /**

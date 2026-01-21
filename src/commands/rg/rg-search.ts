@@ -7,6 +7,7 @@ import type { CommandContext, ExecResult } from "../../types.js";
 import {
   buildRegex,
   convertReplacement,
+  type RegexResult,
   searchContent,
 } from "../search-engine/index.js";
 import { FileTypeRegistry } from "./file-types.js";
@@ -120,8 +121,15 @@ export async function executeSearch(
 
   // Build regex
   let regex: RegExp;
+  let kResetGroup: number | undefined;
   try {
-    regex = buildSearchRegex(patterns, options, effectiveIgnoreCase);
+    const regexResult = buildSearchRegex(
+      patterns,
+      options,
+      effectiveIgnoreCase,
+    );
+    regex = regexResult.regex;
+    kResetGroup = regexResult.kResetGroup;
   } catch {
     return {
       stdout: "",
@@ -187,6 +195,7 @@ export async function executeSearch(
     options,
     showFilename,
     effectiveLineNumbers,
+    kResetGroup,
   );
 }
 
@@ -213,7 +222,7 @@ function buildSearchRegex(
   patterns: string[],
   options: RgOptions,
   ignoreCase: boolean,
-): RegExp {
+): RegexResult {
   let combinedPattern: string;
   if (patterns.length === 1) {
     combinedPattern = patterns[0];
@@ -773,6 +782,7 @@ async function searchFiles(
   options: RgOptions,
   showFilename: boolean,
   effectiveLineNumbers: boolean,
+  kResetGroup?: number,
 ): Promise<ExecResult> {
   let stdout = "";
   let anyMatch = false;
@@ -824,6 +834,7 @@ async function searchFiles(
               : null,
           passthru: options.passthru,
           multiline: options.multiline,
+          kResetGroup,
         });
 
         // For JSON mode, we need to track matches differently

@@ -57,6 +57,8 @@ export interface SearchOptions {
   passthru?: boolean;
   /** Enable multiline matching (patterns can span lines) */
   multiline?: boolean;
+  /** If \K was used, this is the capture group index containing the "real" match */
+  kResetGroup?: number;
 }
 
 export interface SearchResult {
@@ -101,6 +103,7 @@ export function searchContent(
     replace = null,
     passthru = false,
     multiline = false,
+    kResetGroup,
   } = options;
 
   // Multiline mode: search entire content as one string
@@ -119,6 +122,7 @@ export function searchContent(
       showColumn,
       showByteOffset,
       replace,
+      kResetGroup,
     });
   }
 
@@ -183,8 +187,11 @@ export function searchContent(
             match !== null;
             match = regex.exec(line)
           ) {
+            // If \K was used, extract from the capture group instead of full match
+            const rawMatch =
+              kResetGroup !== undefined ? (match[kResetGroup] ?? "") : match[0];
             const matchText =
-              replace !== null ? applyReplacement(replace, match) : match[0];
+              replace !== null ? applyReplacement(replace, match) : rawMatch;
             let prefix = filename ? `${filename}:` : "";
             if (showByteOffset) prefix += `${byteOffset + match.index}:`;
             if (showLineNumbers) prefix += `${i + 1}:`;
@@ -345,7 +352,10 @@ export function searchContent(
           match !== null;
           match = regex.exec(line)
         ) {
-          const matchText = replace !== null ? replace : match[0];
+          // If \K was used, extract from the capture group instead of full match
+          const rawMatch =
+            kResetGroup !== undefined ? (match[kResetGroup] ?? "") : match[0];
+          const matchText = replace !== null ? replace : rawMatch;
           let prefix = filename ? `${filename}:` : "";
           if (showLineNumbers) prefix += `${lineNum + 1}:`;
           if (showColumn) prefix += `${match.index + 1}:`;
@@ -402,6 +412,7 @@ function searchContentMultiline(
     showColumn: boolean;
     showByteOffset: boolean;
     replace: string | null;
+    kResetGroup?: number;
   },
 ): SearchResult {
   const {
@@ -418,6 +429,7 @@ function searchContentMultiline(
     showColumn,
     showByteOffset,
     replace,
+    kResetGroup,
   } = options;
 
   const lines = content.split("\n");
@@ -470,12 +482,15 @@ function searchContentMultiline(
     const endLine = getLineIndex(
       match.index + Math.max(0, match[0].length - 1),
     );
+    // If \K was used, extract from the capture group instead of full match
+    const extractedMatch =
+      kResetGroup !== undefined ? (match[kResetGroup] ?? "") : match[0];
     matchSpans.push({
       startLine,
       endLine,
       byteOffset: match.index,
       column: getColumn(match.index),
-      matchText: match[0],
+      matchText: extractedMatch,
     });
 
     // Prevent infinite loop on zero-length matches

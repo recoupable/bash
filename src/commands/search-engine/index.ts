@@ -17,4 +17,5 @@ export {
   convertReplacement,
   type RegexMode,
   type RegexOptions,
+  type RegexResult,
 } from "./regex.js";

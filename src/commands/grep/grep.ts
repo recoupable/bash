@@ -204,13 +204,16 @@ export const grepCommand: Command = {
           : "basic";
 
     let regex: RegExp;
+    let kResetGroup: number | undefined;
     try {
-      regex = buildRegex(pattern, {
+      const regexResult = buildRegex(pattern, {
         mode: regexMode,
         ignoreCase,
         wholeWord,
         lineRegexp,
       });
+      regex = regexResult.regex;
+      kResetGroup = regexResult.kResetGroup;
     } catch {
       return {
         stdout: "",
@@ -230,6 +233,7 @@ export const grepCommand: Command = {
         beforeContext,
         afterContext,
         maxCount,
+        kResetGroup,
       });
       if (quietMode) {
         return { stdout: "", stderr: "", exitCode: result.matched ? 0 : 1 };
@@ -355,6 +359,7 @@ export const grepCommand: Command = {
               beforeContext,
               afterContext,
               maxCount,
+              kResetGroup,
             });
 
             return { file, result };
