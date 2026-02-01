@@ -63,6 +63,7 @@ export default function TerminalComponent() {
       "/home/user/package.json": getTerminalData("file-package-json"),
       "/home/user/AGENTS.md": getTerminalData("file-agents-md"),
       "/home/user/wtf-is-this.md": getTerminalData("file-wtf-is-this"),
+      "/home/user/dirs/are/fun/author/info.txt": "https://x.com/cramforce\n",
     };
 
     const bash = new Bash({
