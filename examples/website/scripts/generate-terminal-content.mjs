@@ -22,7 +22,8 @@ const license = fs.readFileSync(path.join(repoRoot, "LICENSE"), "utf-8");
 const packageJson = JSON.parse(
   fs.readFileSync(path.join(repoRoot, "package.json"), "utf-8")
 );
-const agentsMd = fs.readFileSync(path.join(repoRoot, "AGENTS.md"), "utf-8");
+const agentsMd = fs.readFileSync(path.join(repoRoot, "AGENTS.npm.md"), "utf-8");
+const wtfIsThis = fs.readFileSync(path.resolve(__dirname, "../README.md"), "utf-8");
 
 // Escape backticks and ${} for template literals
 function escapeTemplate(str) {
@@ -86,6 +87,8 @@ export const FILE_LICENSE = \`${escapeTemplate(license)}\`;
 export const FILE_PACKAGE_JSON = \`${escapeTemplate(simplifiedPackageJson)}\`;
 
 export const FILE_AGENTS_MD = \`${escapeTemplate(agentsMd)}\`;
+
+export const FILE_WTF_IS_THIS = \`${escapeTemplate(wtfIsThis)}\`;
 `;
 
 fs.writeFileSync(outputFile, content);
