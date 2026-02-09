@@ -4,6 +4,7 @@ import { Sandbox } from "@vercel/sandbox";
 import { readdirSync, readFileSync } from "fs";
 import { dirname, join, relative } from "path";
 import { fileURLToPath } from "url";
+import { getSnapshotId } from "@/lib/recoup-api/getSnapshotId";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const AGENT_DATA_DIR = join(__dirname, "./_agent-data");
@@ -74,19 +75,40 @@ export async function POST(req: Request) {
     );
   }
 
+  const bearerToken = authHeader.slice("Bearer ".length);
+
   const { messages } = await req.json();
   const lastUserMessage = messages
     .filter((m: { role: string }) => m.role === "user")
     .pop();
   console.log("Prompt:", lastUserMessage?.parts?.[0]?.text);
 
-  const sandbox = await Sandbox.create();
+  const snapshotId = await getSnapshotId(bearerToken);
+
+  let sandbox: Sandbox;
+  let usedSnapshot = false;
+
+  if (snapshotId) {
+    try {
+      sandbox = await Sandbox.create({
+        source: { type: "snapshot", snapshotId },
+      });
+      usedSnapshot = true;
+    } catch (err) {
+      console.warn("Snapshot sandbox creation failed, falling back:", err);
+      sandbox = await Sandbox.create();
+    }
+  } else {
+    sandbox = await Sandbox.create();
+  }
 
   try {
-    // Upload source files so the agent can explore them
-    const files = readSourceFiles(AGENT_DATA_DIR);
-    if (files.length > 0) {
-      await sandbox.writeFiles(files);
+    if (!usedSnapshot) {
+      // Upload source files so the agent can explore them
+      const files = readSourceFiles(AGENT_DATA_DIR);
+      if (files.length > 0) {
+        await sandbox.writeFiles(files);
+      }
     }
 
     const bashToolkit = await createBashTool({
