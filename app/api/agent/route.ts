@@ -52,13 +52,17 @@ export async function POST(req: Request) {
     .pop();
   console.log("Prompt:", lastUserMessage?.parts?.[0]?.text);
 
+  const t0 = Date.now();
   const sandbox = await createNewSandbox(bearerToken, AGENT_DATA_DIR);
+  console.log(`[timing] createNewSandbox: ${Date.now() - t0}ms`);
 
   try {
+    const t1 = Date.now();
     const bashToolkit = await createBashTool({
       sandbox,
       destination: SANDBOX_CWD,
     });
+    console.log(`[timing] createBashTool: ${Date.now() - t1}ms`);
 
     // Create a fresh agent per request for proper streaming
     const agent = new ToolLoopAgent({
