@@ -88,7 +88,7 @@ export async function POST(req: Request) {
       destination: SANDBOX_CWD,
       promptOptions: {
         toolPrompt:
-          "Available tools: awk, cat, column, curl, cut, diff, find, grep, head, jq, join, nl, node, od, paste, printf, rev, sed, sort, split, strings, tail, tee, tr, uniq, wc, xargs, xxd, and more",
+          "Available tools: awk, cat, column, curl, cut, diff, find, git, grep, head, jq, join, nl, node, od, paste, printf, rev, sed, sort, split, strings, tail, tee, tr, uniq, wc, xargs, xxd, and more",
       },
     });
 
