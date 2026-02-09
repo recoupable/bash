@@ -1,20 +1,18 @@
 import { Sandbox } from "@vercel/sandbox";
-import { getSnapshotId } from "@/lib/recoup-api/getSnapshotId";
+import { createSandbox } from "@/lib/recoup-api/createSandbox";
 import { createFreshSandbox } from "./createFreshSandbox";
 
 export async function createSnapshotSandbox(
   bearerToken: string,
   agentDataDir: string,
 ): Promise<Sandbox> {
-  const snapshotId = await getSnapshotId(bearerToken);
+  const sandboxId = await createSandbox(bearerToken);
 
-  if (snapshotId) {
+  if (sandboxId) {
     try {
-      return await Sandbox.create({
-        source: { type: "snapshot", snapshotId },
-      });
+      return await Sandbox.get({ sandboxId });
     } catch (err) {
-      console.warn("Snapshot sandbox creation failed, falling back:", err);
+      console.warn("Snapshot sandbox connection failed, falling back:", err);
     }
   }
 
