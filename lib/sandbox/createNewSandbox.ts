@@ -33,6 +33,8 @@ export async function createNewSandbox(
   bearerToken: string,
   agentDataDir: string,
 ): Promise<Sandbox> {
+  let sandbox: Sandbox;
+
   const t0 = Date.now();
   const sandboxId = await createSandbox(bearerToken);
   console.log(`[timing] POST /api/sandboxes: ${Date.now() - t0}ms (sandboxId: ${sandboxId})`);
@@ -40,23 +42,25 @@ export async function createNewSandbox(
   if (sandboxId) {
     try {
       const t1 = Date.now();
-      const sandbox = await Sandbox.get({ sandboxId });
+      sandbox = await Sandbox.get({ sandboxId });
       console.log(`[timing] Sandbox.get: ${Date.now() - t1}ms`);
-      return sandbox;
     } catch (err) {
       console.warn("Failed to connect to API sandbox, falling back:", err);
+      const t2 = Date.now();
+      sandbox = await Sandbox.create();
+      console.log(`[timing] Sandbox.create (fallback): ${Date.now() - t2}ms`);
     }
+  } else {
+    const t2 = Date.now();
+    sandbox = await Sandbox.create();
+    console.log(`[timing] Sandbox.create (fallback): ${Date.now() - t2}ms`);
   }
-
-  const t2 = Date.now();
-  const sandbox = await Sandbox.create();
-  console.log(`[timing] Sandbox.create (fallback): ${Date.now() - t2}ms`);
 
   const files = readSourceFiles(agentDataDir);
   if (files.length > 0) {
     const t3 = Date.now();
     await sandbox.writeFiles(files);
-    console.log(`[timing] writeFiles (fallback): ${Date.now() - t3}ms`);
+    console.log(`[timing] writeFiles: ${Date.now() - t3}ms`);
   }
 
   return sandbox;
