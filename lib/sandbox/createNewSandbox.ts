@@ -42,6 +42,11 @@ export async function createNewSandbox(
       const t1 = Date.now();
       const sandbox = await Sandbox.get({ sandboxId });
       console.log(`[timing] Sandbox.get: ${Date.now() - t1}ms`);
+
+      const t2 = Date.now();
+      await sandbox.runCommand("true");
+      console.log(`[timing] sandbox warm-up: ${Date.now() - t2}ms`);
+
       return sandbox;
     } catch (err) {
       console.warn("Failed to connect to API sandbox, falling back:", err);
