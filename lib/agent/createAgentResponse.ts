@@ -1,35 +1,14 @@
 import { ToolLoopAgent, createAgentUIStreamResponse, stepCountIs } from "ai";
 import { createBashTool } from "bash-tool";
 import { Sandbox } from "@vercel/sandbox";
+import { after } from "next/server";
 import { SANDBOX_CWD, SYSTEM_INSTRUCTIONS, TOOL_PROMPT } from "./constants";
+import { saveSnapshot } from "@/lib/sandbox/saveSnapshot";
 
-type CreateSandbox = (bearerToken: string) => Promise<Sandbox>;
-
-export async function handleAgentRequest(
-  req: Request,
-  createSandbox: CreateSandbox,
-): Promise<Response> {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const bearerToken = authHeader.slice("Bearer ".length);
-
-  const { messages } = await req.json();
-  const lastUserMessage = messages
-    .filter((m: { role: string }) => m.role === "user")
-    .pop();
-  console.log("Prompt:", lastUserMessage?.parts?.[0]?.text);
-
-  const sandbox = await createSandbox(bearerToken);
-
-  return createAgentResponse(sandbox, messages);
-}
-
-async function createAgentResponse(
+export async function createAgentResponse(
   sandbox: Sandbox,
   messages: unknown[],
+  bearerToken: string,
 ): Promise<Response> {
   try {
     const bashToolkit = await createBashTool({
@@ -58,19 +37,32 @@ async function createAgentResponse(
     const body = response.body;
     if (body) {
       const transform = new TransformStream();
-      body.pipeTo(transform.writable).finally(() => {
+      const pipePromise = body.pipeTo(transform.writable);
+
+      // Use after() so Vercel keeps the function alive until
+      // the snapshot save completes after streaming ends.
+      after(async () => {
+        await pipePromise.catch(() => {});
+        await saveSnapshot(sandbox, bearerToken);
         sandbox.stop().catch(() => {});
       });
+
       return new Response(transform.readable, {
         headers: response.headers,
         status: response.status,
       });
     }
 
-    sandbox.stop().catch(() => {});
+    after(async () => {
+      await saveSnapshot(sandbox, bearerToken);
+      sandbox.stop().catch(() => {});
+    });
     return response;
   } catch (error) {
-    sandbox.stop().catch(() => {});
+    after(async () => {
+      await saveSnapshot(sandbox, bearerToken);
+      sandbox.stop().catch(() => {});
+    });
     throw error;
   }
 }
