@@ -15,8 +15,8 @@ export function showWelcome(term: Terminal) {
       term.writeln(line);
     }
   } else {
-    term.writeln("\x1b[1mjust-bash\x1b[0m");
-    term.writeln("=========");
+    term.writeln("\x1b[1mrecoup\x1b[0m");
+    term.writeln("======");
   }
   term.writeln("");
 
