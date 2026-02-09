@@ -1,7 +1,7 @@
 import { Sandbox } from "@vercel/sandbox";
 import { readdirSync, readFileSync } from "fs";
 import { join, relative } from "path";
-import { getSnapshotId } from "@/lib/recoup-api/getSnapshotId";
+import { createSandbox } from "@/lib/recoup-api/createSandbox";
 
 const SANDBOX_CWD = "/vercel/sandbox";
 
@@ -33,15 +33,13 @@ export async function createNewSandbox(
   bearerToken: string,
   agentDataDir: string,
 ): Promise<Sandbox> {
-  const snapshotId = await getSnapshotId(bearerToken);
+  const sandboxId = await createSandbox(bearerToken);
 
-  if (snapshotId) {
+  if (sandboxId) {
     try {
-      return await Sandbox.create({
-        source: { type: "snapshot", snapshotId },
-      });
+      return await Sandbox.get({ sandboxId });
     } catch (err) {
-      console.warn("Snapshot sandbox creation failed, falling back:", err);
+      console.warn("Failed to connect to API sandbox, falling back:", err);
     }
   }
 
