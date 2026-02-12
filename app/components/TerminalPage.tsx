@@ -4,6 +4,7 @@ import { useEffect, useState, ReactNode } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import TerminalComponent from "./Terminal";
 import { TerminalData } from "./TerminalData";
+import { useSetupSandbox } from "../hooks/useSetupSandbox";
 
 export default function TerminalPage({
   agentEndpoint,
@@ -14,6 +15,7 @@ export default function TerminalPage({
 }) {
   const [mounted, setMounted] = useState(false);
   const { ready, authenticated, login, getAccessToken } = usePrivy();
+  useSetupSandbox({ getAccessToken, authenticated });
 
   useEffect(() => {
     setMounted(true);
