@@ -1,15 +1,11 @@
 import { useEffect, useRef } from "react";
+import { usePrivy } from "@privy-io/react-auth";
 
 const RECOUP_API_URL =
   process.env.NEXT_PUBLIC_RECOUP_API_URL || "https://recoup-api.vercel.app";
 
-export function useSetupSandbox({
-  getAccessToken,
-  authenticated,
-}: {
-  getAccessToken: () => Promise<string | null>;
-  authenticated: boolean;
-}) {
+export function useSetupSandbox() {
+  const { authenticated, getAccessToken } = usePrivy();
   const hasRun = useRef(false);
 
   useEffect(() => {

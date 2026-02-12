@@ -15,7 +15,7 @@ export default function TerminalPage({
 }) {
   const [mounted, setMounted] = useState(false);
   const { ready, authenticated, login, getAccessToken } = usePrivy();
-  useSetupSandbox({ getAccessToken, authenticated });
+  useSetupSandbox();
 
   useEffect(() => {
     setMounted(true);
