@@ -6,6 +6,7 @@ import { getTerminalData } from "./TerminalData";
 import {
   createStaticCommands,
   createAgentCommand,
+  createNotificationsCommand,
   createInputHandler,
   showWelcome,
 } from "./terminal-parts";
@@ -54,6 +55,7 @@ export default function TerminalComponent({
     // Create commands
     const { aboutCmd, installCmd, githubCmd } = createStaticCommands();
     const agentCmd = createAgentCommand(term, getAccessToken, agentEndpoint);
+    const notificationsCmd = createNotificationsCommand(getAccessToken);
 
     // Files from DOM
     const files = {
@@ -66,7 +68,7 @@ export default function TerminalComponent({
     };
 
     const bash = new Bash({
-      customCommands: [aboutCmd, installCmd, githubCmd, agentCmd],
+      customCommands: [aboutCmd, installCmd, githubCmd, agentCmd, notificationsCmd],
       files,
       cwd: "/home/user",
     });
