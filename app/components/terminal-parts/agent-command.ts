@@ -13,10 +13,20 @@ type TerminalWriter = {
 };
 
 // Format text for terminal: normalize newlines and convert tabs to spaces
+/**
+ *
+ * @param text
+ */
 function formatForTerminal(text: string): string {
   return text.replace(/\t/g, "  ").replace(/\r?\n/g, "\r\n");
 }
 
+/**
+ *
+ * @param term
+ * @param getAccessToken
+ * @param agentEndpoint
+ */
 export function createAgentCommand(
   term: TerminalWriter,
   getAccessToken: () => Promise<string | null>,
@@ -25,12 +35,13 @@ export function createAgentCommand(
   const agentMessages: UIMessage[] = [];
   let messageIdCounter = 0;
 
-  const agentCmd = defineCommand("agent", async (args) => {
+  const agentCmd = defineCommand("agent", async args => {
     const prompt = args.join(" ");
     if (!prompt) {
       return {
         stdout: "",
-        stderr: "Usage: agent <message>\nExample: agent how do I use custom commands?\n\nThis is a multi-turn chat. Use 'agent reset' to clear history.\n",
+        stderr:
+          "Usage: agent <message>\nExample: agent how do I use custom commands?\n\nThis is a multi-turn chat. Use 'agent reset' to clear history.\n",
         exitCode: 1,
       };
     }
@@ -157,7 +168,7 @@ export function createAgentCommand(
         if (displayResult && displayResult.trim()) {
           const resultLines = displayResult.split("\n").filter((l: string) => l.trim());
           const linesToShow = resultLines.slice(0, MAX_TOOL_OUTPUT_LINES);
-          let output = linesToShow.map((line) => `\x1b[2m${line}\x1b[0m`).join("\n");
+          let output = linesToShow.map(line => `\x1b[2m${line}\x1b[0m`).join("\n");
           if (resultLines.length > MAX_TOOL_OUTPUT_LINES) {
             output += `\n\x1b[2m... (${resultLines.length - MAX_TOOL_OUTPUT_LINES} more lines)\x1b[0m`;
           }
@@ -245,7 +256,8 @@ export function createAgentCommand(
             else if (data.type === "tool-output-available" && data.toolCallId) {
               const existing = toolCallsMap.get(data.toolCallId);
               const result = data.output;
-              const resultStr = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+              const resultStr =
+                typeof result === "string" ? result : JSON.stringify(result, null, 2);
 
               const tc = {
                 toolName: existing?.toolName || "tool",
@@ -266,13 +278,11 @@ export function createAgentCommand(
               // Start streaming thinking in dim italic
               isStreaming = true;
               term.write("\x1b[2m\x1b[3m"); // dim + italic
-            }
-            else if (data.type === "reasoning-delta" && data.delta) {
+            } else if (data.type === "reasoning-delta" && data.delta) {
               // Stream thinking tokens as they arrive
               term.write(formatForTerminal(data.delta));
               resetThinkingTimer(); // Keep resetting while actively streaming
-            }
-            else if (data.type === "reasoning-end") {
+            } else if (data.type === "reasoning-end") {
               // End thinking block
               if (isStreaming) {
                 term.write("\x1b[0m\r\n"); // reset styling + newline
@@ -283,19 +293,15 @@ export function createAgentCommand(
             else if (data.type === "error") {
               const errorMsg = data.error || data.message || "Unknown error";
               term.write(`\x1b[31mError: ${formatForTerminal(String(errorMsg))}\x1b[0m\r\n`);
-            }
-            else if (data.type === "tool-input-error") {
+            } else if (data.type === "tool-input-error") {
               const errorMsg = data.error || "Tool input error";
               term.write(`\x1b[31m[Tool Error] ${formatForTerminal(String(errorMsg))}\x1b[0m\r\n`);
-            }
-            else if (data.type === "tool-output-error") {
+            } else if (data.type === "tool-output-error") {
               const errorMsg = data.error || "Tool execution error";
               term.write(`\x1b[31m[Tool Error] ${formatForTerminal(String(errorMsg))}\x1b[0m\r\n`);
-            }
-            else if (data.type === "tool-output-denied") {
+            } else if (data.type === "tool-output-denied") {
               term.write(`\x1b[33m[Tool Denied]\x1b[0m\r\n`);
-            }
-            else if (data.type === "abort") {
+            } else if (data.type === "abort") {
               term.write(`\x1b[33m[Aborted]\x1b[0m\r\n`);
             }
           } catch (e) {

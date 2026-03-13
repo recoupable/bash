@@ -17,6 +17,8 @@ export class InputHandler {
 
   /**
    * Attach input handling to an element
+   *
+   * @param container
    */
   attach(container: HTMLElement): void {
     this.container = container;
@@ -85,6 +87,8 @@ export class InputHandler {
 
   /**
    * Register a callback for input data
+   *
+   * @param callback
    */
   onData(callback: DataCallback): void {
     this.callbacks.push(callback);
@@ -92,6 +96,8 @@ export class InputHandler {
 
   /**
    * Emit data to all registered callbacks
+   *
+   * @param data
    */
   private emit(data: string): void {
     for (const cb of this.callbacks) {
@@ -177,6 +183,9 @@ export class InputHandler {
     this.container?.classList.remove("focused");
   };
 
+  /**
+   *
+   */
   private scrollCursorIntoView(): void {
     if (!this.container) return;
 
