@@ -8,10 +8,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const AGENT_DATA_DIR = join(__dirname, "../agent/_agent-data");
 
 // Recursively read all files in a directory
-async function readAllFiles(
-  dir: string,
-  baseDir: string
-): Promise<Record<string, string>> {
+/**
+ *
+ * @param dir
+ * @param baseDir
+ */
+async function readAllFiles(dir: string, baseDir: string): Promise<Record<string, string>> {
   const result: Record<string, string> = {};
   const entries = await readdir(dir, { withFileTypes: true });
 
@@ -85,6 +87,9 @@ async function readAllFiles(
   return result;
 }
 
+/**
+ *
+ */
 export async function GET() {
   const files = await readAllFiles(AGENT_DATA_DIR, AGENT_DATA_DIR);
 

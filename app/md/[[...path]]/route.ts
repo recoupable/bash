@@ -8,33 +8,42 @@ import {
 
 const FILES: Record<string, string> = {
   "README.md": FILE_README,
-  "LICENSE": FILE_LICENSE,
+  LICENSE: FILE_LICENSE,
   "package.json": FILE_PACKAGE_JSON,
   "AGENTS.md": FILE_AGENTS_MD,
   "wtf-is-this.md": FILE_WTF_IS_THIS,
 };
 
+/**
+ *
+ */
 export function generateStaticParams() {
   return [
     { path: [] }, // /md -> README.md
-    ...Object.keys(FILES).map((file) => ({ path: [file] })),
+    ...Object.keys(FILES).map(file => ({ path: [file] })),
   ];
 }
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ path?: string[] }> }
-) {
+/**
+ *
+ * @param _request
+ * @param root0
+ * @param root0.params
+ */
+export async function GET(_request: Request, { params }: { params: Promise<{ path?: string[] }> }) {
   let { path } = await params;
   const filePath = path?.join("/").replace(/^md\//, "") || "README.md";
 
   const content = FILES[filePath];
 
   if (!content) {
-    return new Response(`File not found: ${filePath}\n\nAvailable files:\n${Object.keys(FILES).join("\n")}`, {
-      status: 404,
-      headers: { "Content-Type": "text/plain" },
-    });
+    return new Response(
+      `File not found: ${filePath}\n\nAvailable files:\n${Object.keys(FILES).join("\n")}`,
+      {
+        status: 404,
+        headers: { "Content-Type": "text/plain" },
+      },
+    );
   }
 
   const contentType = filePath.endsWith(".json")

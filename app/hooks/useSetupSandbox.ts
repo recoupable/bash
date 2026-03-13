@@ -3,6 +3,9 @@ import { usePrivy } from "@privy-io/react-auth";
 import { getSandboxes } from "@/lib/recoup-api/getSandboxes";
 import { setupSandbox } from "@/lib/recoup-api/setupSandbox";
 
+/**
+ *
+ */
 export function useSetupSandbox() {
   const { authenticated, getAccessToken } = usePrivy();
   const hasRun = useRef(false);
