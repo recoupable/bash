@@ -10,8 +10,12 @@ type Terminal = {
   onData: (callback: (data: string) => void) => void;
 };
 
-
 // Find the start of the previous word
+/**
+ *
+ * @param str
+ * @param pos
+ */
 function findPrevWordBoundary(str: string, pos: number): number {
   if (pos <= 0) return 0;
   let i = pos - 1;
@@ -23,6 +27,11 @@ function findPrevWordBoundary(str: string, pos: number): number {
 }
 
 // Find the end of the next word
+/**
+ *
+ * @param str
+ * @param pos
+ */
 function findNextWordBoundary(str: string, pos: number): number {
   const len = str.length;
   if (pos >= len) return len;
@@ -35,7 +44,15 @@ function findNextWordBoundary(str: string, pos: number): number {
 }
 
 // Extract the word being typed for completion
-function getCompletionContext(cmd: string, cursorPos: number): { prefix: string; wordStart: number } {
+/**
+ *
+ * @param cmd
+ * @param cursorPos
+ */
+function getCompletionContext(
+  cmd: string,
+  cursorPos: number,
+): { prefix: string; wordStart: number } {
   let wordStart = cursorPos;
   // Walk back to find the start of the current word
   while (wordStart > 0 && cmd[wordStart - 1] !== " ") {
@@ -47,10 +64,13 @@ function getCompletionContext(cmd: string, cursorPos: number): { prefix: string;
   };
 }
 
+/**
+ *
+ * @param term
+ * @param bash
+ */
 export function createInputHandler(term: Terminal, bash: Bash) {
-  const history: string[] = JSON.parse(
-    sessionStorage.getItem(HISTORY_KEY) || "[]"
-  );
+  const history: string[] = JSON.parse(sessionStorage.getItem(HISTORY_KEY) || "[]");
   let cmd = "";
   let cursorPos = 0;
   let historyIndex = history.length;
@@ -201,14 +221,12 @@ export function createInputHandler(term: Terminal, bash: Bash) {
       const lsResult = await bash.exec("ls -1");
       candidates = lsResult.stdout
         .split("\n")
-        .map((f) => f.trim())
-        .filter((f) => f.length > 0);
+        .map(f => f.trim())
+        .filter(f => f.length > 0);
     }
 
     // Find matching candidates
-    const matches = candidates.filter((c) =>
-      c.toLowerCase().startsWith(prefix.toLowerCase())
-    );
+    const matches = candidates.filter(c => c.toLowerCase().startsWith(prefix.toLowerCase()));
 
     if (matches.length === 0) {
       // No matches - do nothing
@@ -264,19 +282,14 @@ export function createInputHandler(term: Terminal, bash: Bash) {
 
     history.push(trimmed);
     historyIndex = history.length;
-    sessionStorage.setItem(
-      HISTORY_KEY,
-      JSON.stringify(history.slice(-MAX_HISTORY))
-    );
+    sessionStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-MAX_HISTORY)));
 
     if (trimmed === "clear") {
       term.write("\x1b[2J\x1b[3J\x1b[H");
     } else {
       const result = await bash.exec(trimmed);
       if (result.stdout)
-        term.write(
-          formatMarkdown(colorizeUrls(result.stdout)).replace(/\n/g, "\r\n")
-        );
+        term.write(formatMarkdown(colorizeUrls(result.stdout)).replace(/\n/g, "\r\n"));
       if (result.stderr) term.write(result.stderr.replace(/\n/g, "\r\n"));
     }
 

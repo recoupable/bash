@@ -10,6 +10,8 @@ const RESET = "\x1b[0m";
 /**
  * Apply terminal formatting to markdown-style text.
  * Preserves the actual characters but wraps them in ANSI escape sequences.
+ *
+ * @param text
  */
 export function formatMarkdown(text: string): string {
   let result = text;
@@ -36,7 +38,7 @@ export function formatMarkdown(text: string): string {
   });
 
   // Inline code: `code` (single line only, no nested backticks)
-  result = result.replace(/`([^`\n]+)`/g, (match) => {
+  result = result.replace(/`([^`\n]+)`/g, match => {
     return `${CYAN}${match}${RESET}`;
   });
 

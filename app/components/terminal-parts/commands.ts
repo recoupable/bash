@@ -1,6 +1,9 @@
 import { defineCommand } from "just-bash/browser";
 import { getTerminalData } from "../TerminalData";
 
+/**
+ *
+ */
 export function createStaticCommands() {
   const aboutCmd = defineCommand("about", async () => ({
     stdout: getTerminalData("cmd-about"),

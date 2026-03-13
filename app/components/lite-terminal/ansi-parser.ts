@@ -13,7 +13,7 @@ export interface ParseResult {
 
 // SGR (Select Graphic Rendition) parameter handlers
 const SGR_HANDLERS: Record<number, (style: TextStyle) => void> = {
-  0: (s) => {
+  0: s => {
     // Reset all attributes
     delete s.bold;
     delete s.dim;
@@ -21,85 +21,88 @@ const SGR_HANDLERS: Record<number, (style: TextStyle) => void> = {
     delete s.underline;
     delete s.color;
   },
-  1: (s) => {
+  1: s => {
     s.bold = true;
   },
-  2: (s) => {
+  2: s => {
     s.dim = true;
   },
-  3: (s) => {
+  3: s => {
     s.italic = true;
   },
-  4: (s) => {
+  4: s => {
     s.underline = true;
   },
-  22: (s) => {
+  22: s => {
     delete s.bold;
     delete s.dim;
   },
-  23: (s) => {
+  23: s => {
     delete s.italic;
   },
-  24: (s) => {
+  24: s => {
     delete s.underline;
   },
   // Standard colors (foreground)
-  30: (s) => {
+  30: s => {
     s.color = "black";
   },
-  31: (s) => {
+  31: s => {
     s.color = "red";
   },
-  32: (s) => {
+  32: s => {
     s.color = "green";
   },
-  33: (s) => {
+  33: s => {
     s.color = "yellow";
   },
-  34: (s) => {
+  34: s => {
     s.color = "blue";
   },
-  35: (s) => {
+  35: s => {
     s.color = "magenta";
   },
-  36: (s) => {
+  36: s => {
     s.color = "cyan";
   },
-  37: (s) => {
+  37: s => {
     s.color = "white";
   },
-  39: (s) => {
+  39: s => {
     delete s.color;
   }, // Default foreground
   // Bright colors
-  90: (s) => {
+  90: s => {
     s.color = "brightBlack";
   },
-  91: (s) => {
+  91: s => {
     s.color = "brightRed";
   },
-  92: (s) => {
+  92: s => {
     s.color = "brightGreen";
   },
-  93: (s) => {
+  93: s => {
     s.color = "brightYellow";
   },
-  94: (s) => {
+  94: s => {
     s.color = "brightBlue";
   },
-  95: (s) => {
+  95: s => {
     s.color = "brightMagenta";
   },
-  96: (s) => {
+  96: s => {
     s.color = "brightCyan";
   },
-  97: (s) => {
+  97: s => {
     s.color = "brightWhite";
   },
 };
 
 /**
  * Parse SGR (Select Graphic Rendition) parameters and update style
+ *
+ * @param params
+ * @param style
  */
 function parseSGR(params: string, style: TextStyle): Partial<TextStyle> {
   const parts = params ? params.split(";").map(Number) : [0];
@@ -181,6 +184,8 @@ export class AnsiParser {
   /**
    * Parse text with ANSI escape codes
    * Returns an array of parse results
+   *
+   * @param text
    */
   parse(text: string): ParseResult[] {
     const results: ParseResult[] = [];
@@ -210,10 +215,7 @@ export class AnsiParser {
         if (nextChar === "[") {
           // Find the end of the CSI sequence (letter A-Z, a-z, or @)
           let j = i + 2;
-          while (
-            j < this.buffer.length &&
-            !/[A-Za-z@~]/.test(this.buffer[j])
-          ) {
+          while (j < this.buffer.length && !/[A-Za-z@~]/.test(this.buffer[j])) {
             j++;
           }
 
@@ -330,6 +332,9 @@ export class AnsiParser {
 
   /**
    * Handle CSI (Control Sequence Introducer) sequences
+   *
+   * @param params
+   * @param cmd
    */
   private handleCSI(params: string, cmd: string): ParseResult | null {
     switch (cmd) {
@@ -387,6 +392,8 @@ export class AnsiParser {
 
   /**
    * Handle OSC (Operating System Command) sequences
+   *
+   * @param content
    */
   private handleOSC(content: string): ParseResult | null {
     // OSC 8 - Hyperlinks: 8;;URL or 8;params;URL
