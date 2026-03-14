@@ -39,6 +39,10 @@ export class LiteTerminal {
   private dirtyLines: Set<number> = new Set();
   private lastCursorLine = -1;
 
+  /**
+   *
+   * @param options
+   */
   constructor(options: LiteTerminalOptions = {}) {
     this._options = {
       cursorBlink: true,
@@ -88,6 +92,8 @@ export class LiteTerminal {
 
   /**
    * Open terminal in a container element
+   *
+   * @param container
    */
   open(container: HTMLElement): void {
     this.container = container;
@@ -134,6 +140,8 @@ export class LiteTerminal {
 
   /**
    * Write data to the terminal
+   *
+   * @param data
    */
   write(data: string): void {
     this.pendingWrites.push(data);
@@ -142,6 +150,8 @@ export class LiteTerminal {
 
   /**
    * Write data followed by newline
+   *
+   * @param data
    */
   writeln(data: string): void {
     this.write(data + "\n");
@@ -164,6 +174,8 @@ export class LiteTerminal {
 
   /**
    * Register callback for input data
+   *
+   * @param callback
    */
   onData(callback: DataCallback): void {
     this.inputHandler.onData(callback);
@@ -231,6 +243,8 @@ export class LiteTerminal {
 
   /**
    * Process a single parse result
+   *
+   * @param result
    */
   private processParseResult(result: ParseResult): void {
     switch (result.type) {
@@ -258,6 +272,8 @@ export class LiteTerminal {
 
   /**
    * Write text to the current position
+   *
+   * @param text
    */
   private writeText(text: string): void {
     for (const char of text) {
@@ -271,6 +287,8 @@ export class LiteTerminal {
 
   /**
    * Write a single character at current position
+   *
+   * @param char
    */
   private writeChar(char: string): void {
     const line = this.lines[this.currentLine];
@@ -338,9 +356,7 @@ export class LiteTerminal {
       } else {
         // Different style
         const after = seg.text.slice(1);
-        const newSegments: StyledSegment[] = [
-          { text: char, style: { ...this.currentStyle } },
-        ];
+        const newSegments: StyledSegment[] = [{ text: char, style: { ...this.currentStyle } }];
         if (after) {
           newSegments.push({ text: after, style: seg.style });
         }
@@ -389,11 +405,12 @@ export class LiteTerminal {
 
   /**
    * Handle cursor movement commands
+   *
+   * @param cursor
+   * @param cursor.action
+   * @param cursor.count
    */
-  private handleCursor(cursor: {
-    action: "left" | "right" | "home";
-    count?: number;
-  }): void {
+  private handleCursor(cursor: { action: "left" | "right" | "home"; count?: number }): void {
     const count = cursor.count || 1;
 
     switch (cursor.action) {
@@ -413,6 +430,8 @@ export class LiteTerminal {
 
   /**
    * Handle clear commands
+   *
+   * @param type
    */
   private handleClear(type: "line" | "screen" | "scrollback"): void {
     switch (type) {
@@ -426,10 +445,7 @@ export class LiteTerminal {
           const segLen = line[segmentIndex].text.length;
           if (pos + segLen > this.currentCol) {
             // Truncate this segment
-            line[segmentIndex].text = line[segmentIndex].text.slice(
-              0,
-              this.currentCol - pos
-            );
+            line[segmentIndex].text = line[segmentIndex].text.slice(0, this.currentCol - pos);
             segmentIndex++;
             break;
           }
@@ -456,6 +472,9 @@ export class LiteTerminal {
 
   /**
    * Compare two styles for equality
+   *
+   * @param a
+   * @param b
    */
   private stylesEqual(a: TextStyle, b: TextStyle): boolean {
     return (
@@ -471,13 +490,18 @@ export class LiteTerminal {
   /**
    * Render the terminal content to DOM with inline cursor
    * Uses incremental updates when possible for better iOS performance
+   *
+   * @param forceFullRender
    */
   private render(forceFullRender = false): void {
     if (!this.outputElement || !this.cursorElement) return;
 
     // Full render if forced or if structure changed significantly
-    if (forceFullRender || this.lineElements.length === 0 ||
-        this.lines.length !== this.lineElements.length) {
+    if (
+      forceFullRender ||
+      this.lineElements.length === 0 ||
+      this.lines.length !== this.lineElements.length
+    ) {
       this.fullRender();
       return;
     }
@@ -529,6 +553,8 @@ export class LiteTerminal {
 
   /**
    * Re-render a single line
+   *
+   * @param lineIndex
    */
   private renderLine(lineIndex: number): void {
     const lineEl = this.lineElements[lineIndex];
@@ -538,6 +564,9 @@ export class LiteTerminal {
 
   /**
    * Render the content of a single line into a line element
+   *
+   * @param lineIndex
+   * @param lineEl
    */
   private renderLineContent(lineIndex: number, lineEl: HTMLElement): void {
     if (!this.cursorElement) return;
@@ -602,8 +631,14 @@ export class LiteTerminal {
 
   /**
    * Create a styled element - span, anchor, or text node
+   *
+   * @param text
+   * @param style
    */
-  private createStyledSpan(text: string, style: TextStyle): HTMLSpanElement | HTMLAnchorElement | Text | DocumentFragment {
+  private createStyledSpan(
+    text: string,
+    style: TextStyle,
+  ): HTMLSpanElement | HTMLAnchorElement | Text | DocumentFragment {
     const classes = this.getStyleClasses(style);
     const inlineStyle = this.getInlineStyle(style);
 
@@ -640,11 +675,15 @@ export class LiteTerminal {
 
   /**
    * Create text content with clickable URL links (for plain URLs without OSC 8)
+   *
+   * @param text
+   * @param classes
+   * @param inlineStyle
    */
   private createTextWithLinks(
     text: string,
     classes: string,
-    inlineStyle: string
+    inlineStyle: string,
   ): DocumentFragment {
     const fragment = document.createDocumentFragment();
     let lastIndex = 0;
@@ -686,8 +725,16 @@ export class LiteTerminal {
 
   /**
    * Create a styled element (span or text node) - helper for createTextWithLinks
+   *
+   * @param text
+   * @param classes
+   * @param inlineStyle
    */
-  private createStyledElement(text: string, classes: string, inlineStyle: string): HTMLSpanElement | Text {
+  private createStyledElement(
+    text: string,
+    classes: string,
+    inlineStyle: string,
+  ): HTMLSpanElement | Text {
     if (!classes && !inlineStyle) {
       return document.createTextNode(text);
     }
@@ -706,8 +753,9 @@ export class LiteTerminal {
 
     const charWidth = this.measureCharWidth();
     const computedStyle = getComputedStyle(this.outputElement);
-    const lineHeight = parseFloat(computedStyle.lineHeight) ||
-                       (this._options.fontSize! * (this._options.lineHeight || 1.2));
+    const lineHeight =
+      parseFloat(computedStyle.lineHeight) ||
+      this._options.fontSize! * (this._options.lineHeight || 1.2);
 
     this.cursorElement.style.width = `${charWidth}px`;
     this.cursorElement.style.height = `${lineHeight}px`;
@@ -715,13 +763,28 @@ export class LiteTerminal {
 
   // Allowlist of valid color class names (prevents XSS via class injection)
   private static readonly VALID_COLOR_CLASSES = new Set([
-    "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
-    "brightBlack", "brightRed", "brightGreen", "brightYellow",
-    "brightBlue", "brightMagenta", "brightCyan", "brightWhite",
+    "black",
+    "red",
+    "green",
+    "yellow",
+    "blue",
+    "magenta",
+    "cyan",
+    "white",
+    "brightBlack",
+    "brightRed",
+    "brightGreen",
+    "brightYellow",
+    "brightBlue",
+    "brightMagenta",
+    "brightCyan",
+    "brightWhite",
   ]);
 
   /**
    * Get CSS classes for a text style
+   *
+   * @param style
    */
   private getStyleClasses(style: TextStyle): string {
     const classes: string[] = [];
@@ -744,6 +807,8 @@ export class LiteTerminal {
 
   /**
    * Get inline style for RGB colors
+   *
+   * @param style
    */
   private getInlineStyle(style: TextStyle): string {
     // Only allow properly formatted rgb() values (XSS protection)
@@ -752,8 +817,6 @@ export class LiteTerminal {
     }
     return "";
   }
-
-
 
   /**
    * Scroll to bottom of terminal (uses window scroll)
@@ -803,22 +866,13 @@ export class LiteTerminal {
 
     const theme = this._options.theme || {};
 
-    this.container.style.setProperty(
-      "background-color",
-      theme.background || "#000"
-    );
+    this.container.style.setProperty("background-color", theme.background || "#000");
     this.container.style.setProperty("color", theme.foreground || "#e0e0e0");
 
     // Set CSS custom properties for colors
     this.container.style.setProperty("--term-cyan", theme.cyan || "#0AC5B3");
-    this.container.style.setProperty(
-      "--term-brightCyan",
-      theme.brightCyan || "#3DD9C8"
-    );
-    this.container.style.setProperty(
-      "--term-brightBlack",
-      theme.brightBlack || "#666"
-    );
+    this.container.style.setProperty("--term-brightCyan", theme.brightCyan || "#3DD9C8");
+    this.container.style.setProperty("--term-brightBlack", theme.brightBlack || "#666");
 
     // Cursor color
     if (this.cursorElement) {
