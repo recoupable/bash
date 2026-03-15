@@ -3,6 +3,11 @@ import { createAgentResponse } from "./createAgentResponse";
 
 type CreateSandbox = (bearerToken: string) => Promise<Sandbox>;
 
+/**
+ *
+ * @param req
+ * @param createSandbox
+ */
 export async function handleAgentRequest(
   req: Request,
   createSandbox: CreateSandbox,
@@ -15,9 +20,7 @@ export async function handleAgentRequest(
   const bearerToken = authHeader.slice("Bearer ".length);
 
   const { messages } = await req.json();
-  const lastUserMessage = messages
-    .filter((m: { role: string }) => m.role === "user")
-    .pop();
+  const lastUserMessage = messages.filter((m: { role: string }) => m.role === "user").pop();
   console.log("Prompt:", lastUserMessage?.parts?.[0]?.text);
 
   const sandbox = await createSandbox(bearerToken);

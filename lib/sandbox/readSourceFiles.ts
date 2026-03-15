@@ -2,6 +2,11 @@ import { readdirSync, readFileSync } from "fs";
 import { join, relative } from "path";
 import { SANDBOX_CWD } from "@/lib/agent/constants";
 
+/**
+ *
+ * @param dir
+ * @param baseDir
+ */
 export function readSourceFiles(
   dir: string,
   baseDir?: string,

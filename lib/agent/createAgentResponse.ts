@@ -5,6 +5,12 @@ import { after } from "next/server";
 import { SANDBOX_CWD, SYSTEM_INSTRUCTIONS, TOOL_PROMPT } from "./constants";
 import { saveSnapshot } from "@/lib/sandbox/saveSnapshot";
 
+/**
+ *
+ * @param sandbox
+ * @param messages
+ * @param bearerToken
+ */
 export async function createAgentResponse(
   sandbox: Sandbox,
   messages: unknown[],
