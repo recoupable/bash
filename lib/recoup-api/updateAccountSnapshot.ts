@@ -1,5 +1,10 @@
 import { RECOUP_API_URL } from "@/lib/consts";
 
+/**
+ *
+ * @param bearerToken
+ * @param snapshotId
+ */
 export async function updateAccountSnapshot(
   bearerToken: string,
   snapshotId: string,
