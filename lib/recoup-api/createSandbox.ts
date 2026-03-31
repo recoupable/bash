@@ -1,8 +1,10 @@
 import { RECOUP_API_URL } from "@/lib/consts";
 
-export async function createSandbox(
-  bearerToken: string,
-): Promise<string | null> {
+/**
+ *
+ * @param bearerToken
+ */
+export async function createSandbox(bearerToken: string): Promise<string | null> {
   try {
     const response = await fetch(`${RECOUP_API_URL}/api/sandboxes`, {
       method: "POST",

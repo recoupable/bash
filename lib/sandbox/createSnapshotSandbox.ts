@@ -2,6 +2,11 @@ import { Sandbox } from "@vercel/sandbox";
 import { createSandbox } from "@/lib/recoup-api/createSandbox";
 import { createFreshSandbox } from "./createFreshSandbox";
 
+/**
+ *
+ * @param bearerToken
+ * @param agentDataDir
+ */
 export async function createSnapshotSandbox(
   bearerToken: string,
   agentDataDir: string,
